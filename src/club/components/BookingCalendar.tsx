@@ -167,78 +167,146 @@ const BookingCalendar: React.FC = () => {
 
   // Mostrar vista de detalle de reserva si hay una reserva seleccionada y estamos en la ruta de detalle
   if (reservaDetalle && reservaId) {
+    const fecha = new Date(reservaDetalle.fecha);
+    const fechaFormateada = fecha.toLocaleDateString('es-AR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
     return (
-      <div className="bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Detalle de la Reserva</h2>
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 max-w-2xl mx-auto w-full">
+        <div className="flex justify-between items-center mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Detalle de la Reserva</h2>
           <button 
             onClick={handleCerrarDetalle}
-            className="text-gray-500 hover:text-gray-700"
+            className="p-1 -mr-1 text-gray-500 hover:text-gray-700 sm:p-0"
             aria-label="Cerrar"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
         
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-700">Cliente</h3>
-              <p className="text-gray-600">{reservaDetalle.nombre}</p>
-              <p className="text-gray-600">{reservaDetalle.email}</p>
-              <p className="text-gray-600">Tel: {reservaDetalle.celular}</p>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-700 mb-2">Información del Cliente</h3>
+              <div className="space-y-1 text-sm sm:text-base">
+                <p className="text-gray-800 font-medium">{reservaDetalle.nombre}</p>
+                <p className="text-gray-600 flex items-center">
+                  <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  {reservaDetalle.email}
+                </p>
+                <p className="text-gray-600 flex items-center">
+                  <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  <a href={`tel:${reservaDetalle.celular}`} className="hover:underline">
+                    {reservaDetalle.celular}
+                  </a>
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-700">Detalles</h3>
-              <p className="text-gray-600">Bote: {reservaDetalle.bote} (Capacidad: {reservaDetalle.capacidad})</p>
-              <p className="text-gray-600">Personas: {reservaDetalle.personas}</p>
-              <p className="text-gray-600">Mojarras: {reservaDetalle.mojarras || 0}</p>
-              <p className="text-gray-600">
-                Fecha: {new Date(reservaDetalle.fecha).toLocaleDateString()}
-              </p>
-              <p className="text-gray-600">Total: ${reservaDetalle.total}</p>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-700 mb-2">Detalles de la Reserva</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm sm:text-base">
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {fechaFormateada}
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    {reservaDetalle.bote}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    {reservaDetalle.personas} {reservaDetalle.personas === 1 ? 'persona' : 'personas'}
+                  </div>
+                  {reservaDetalle.mojarras > 0 && (
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-2 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                      </svg>
+                      {reservaDetalle.mojarras} mojarra{reservaDetalle.mojarras !== 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-sm sm:text-base font-medium text-gray-800 flex justify-between">
+                  <span>Total:</span>
+                  <span>${reservaDetalle.total}</span>
+                </p>
+              </div>
             </div>
           </div>
           
           {reservaDetalle.mensaje && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">Mensaje</h3>
-              <p className="text-gray-600">{reservaDetalle.mensaje}</p>
+            <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-700 mb-2">Mensaje del Cliente</h3>
+              <p className="text-gray-600 text-sm sm:text-base">{reservaDetalle.mensaje}</p>
             </div>
           )}
           
-          <div className="flex justify-between items-center mt-6 pt-4 border-t">
-            <span className={`px-4 py-2 rounded-full text-sm font-medium ${
-              reservaDetalle.estado === 'confirmada' ? 'bg-green-100 text-green-800' :
-              reservaDetalle.estado === 'eliminada' || reservaDetalle.estado === 'cancelada' ? 'bg-red-100 text-red-800' :
-              'bg-yellow-100 text-yellow-800'
-            }`}>
-              {reservaDetalle.estado.charAt(0).toUpperCase() + reservaDetalle.estado.slice(1)}
-            </span>
-            
-            <div className="flex gap-2">
-              {reservaDetalle.estado === 'pendiente' && (
-                <>
-                  <button
-                    onClick={() => abrirModal(reservaDetalle, 'confirmar')}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
-                  >
-                    Confirmar
-                  </button>
-                  <button
-                    onClick={() => abrirModal(reservaDetalle, 'eliminar')}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
-                  >
-                    Cancelar
-                  </button>
-                </>
-              )}
-              <button
-                onClick={handleCerrarDetalle}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 text-sm font-medium"
-              >
-                Volver al listado
-              </button>
+          <div className="mt-6 pt-4 border-t">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <span className={`inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+                reservaDetalle.estado === 'confirmada' ? 'bg-green-100 text-green-800' :
+                reservaDetalle.estado === 'eliminada' || reservaDetalle.estado === 'cancelada' ? 'bg-red-100 text-red-800' :
+                'bg-yellow-100 text-yellow-800'
+              }`}>
+                {reservaDetalle.estado === 'confirmada' ? 'Confirmada' :
+                 reservaDetalle.estado === 'eliminada' || reservaDetalle.estado === 'cancelada' ? 'Cancelada' :
+                 'Pendiente de confirmación'}
+              </span>
+              
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                {reservaDetalle.estado === 'pendiente' && (
+                  <>
+                    <button
+                      onClick={() => abrirModal(reservaDetalle, 'confirmar')}
+                      className="flex-1 flex items-center justify-center px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors whitespace-nowrap"
+                    >
+                      <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => abrirModal(reservaDetalle, 'eliminar')}
+                      className="flex-1 flex items-center justify-center px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors whitespace-nowrap"
+                    >
+                      <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancelar
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={handleCerrarDetalle}
+                  className="flex-1 flex items-center justify-center px-4 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-medium transition-colors whitespace-nowrap"
+                >
+                  <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Volver al listado
+                </button>
+              </div>
             </div>
           </div>
         </div>
