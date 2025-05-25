@@ -15,6 +15,10 @@ interface Notification {
   total?: number;
 }
 
+interface NotificationsPanelProps {
+  onNotificationClick?: () => void;
+}
+
 const iconForType = (type: string) => {
   switch(type) {
     case 'reserva': return <Bell className="w-5 h-5 text-blue-500" />;
@@ -23,7 +27,7 @@ const iconForType = (type: string) => {
   }
 };
 
-const NotificationsPanel: React.FC = () => {
+const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNotificationClick }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const club = auth.currentUser;
@@ -53,6 +57,11 @@ const NotificationsPanel: React.FC = () => {
       // Marcar como leído si no lo está
       if (!notif.read) {
         await updateDoc(doc(db, "notifications", notif.id), { read: true });
+      }
+      
+      // Cerrar el panel de notificaciones
+      if (onNotificationClick) {
+        onNotificationClick();
       }
       
       // Navegar a la reserva si tiene un ID de reserva

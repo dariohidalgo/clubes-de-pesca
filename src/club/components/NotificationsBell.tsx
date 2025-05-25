@@ -64,7 +64,7 @@ const NotificationsBell: React.FC = () => {
           role="dialog"
           aria-label="Panel de notificaciones"
         >
-          <NotificationsPanel />
+          <NotificationsPanel onNotificationClick={() => setOpen(false)} />
         </div>
       )}
     </div>
