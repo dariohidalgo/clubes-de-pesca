@@ -853,7 +853,7 @@ const BookingCalendar: React.FC = () => {
                     }
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Este mensaje se enviará al pescador por correo electrónico.
+                    Este mensaje se enviará al pescador.
                   </p>
                 </div>
               </div>
