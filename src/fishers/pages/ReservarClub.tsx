@@ -1,8 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, addDoc, collection } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, updateDoc } from "firebase/firestore";
 import { db, auth } from "../../../firebaseConfig";
 import { useAuthState } from "react-firebase-hooks/auth";
+
+interface Bote {
+  tipo: string;
+  cantidad: number;
+  capacidad: number;
+  precio: number;
+  disponible?: boolean;
+  stock?: number;
+}
 
 interface Club {
   id: string;
@@ -10,7 +19,7 @@ interface Club {
   logoUrl: string;
   location: string;
   phone: string;
-  boats: { tipo: string; cantidad: number; capacidad: number; precio: number }[];
+  boats: Bote[];
   mojarras?: { precio: number; disponible: boolean };
 }
 
@@ -28,6 +37,7 @@ const ReservarClub: React.FC = () => {
   const [fecha, setFecha] = useState("");
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
+  const [stock, setStock] = useState<{[key: string]: number}>({});
   const navigate = useNavigate();
 
   // Traer datos del club y precios
@@ -40,6 +50,13 @@ const ReservarClub: React.FC = () => {
         if (docSnap.exists()) {
           const data = { id: docSnap.id, ...docSnap.data() } as Club;
           setClub(data);
+
+          // Inicializar stock
+          const stockInicial: {[key: string]: number} = {};
+          data.boats.forEach(boat => {
+            stockInicial[`${boat.tipo}-${boat.capacidad}`] = boat.cantidad;
+          });
+          setStock(stockInicial);
 
           // Set precio mojarra si hay info
           if (data.mojarras && typeof data.mojarras.precio === "number") {
@@ -76,6 +93,12 @@ const ReservarClub: React.FC = () => {
     if (!bote) return setError("Seleccioná un tipo de bote");
     if (!fecha) return setError("Seleccioná una fecha");
     if (personas < 1 || personas > capacidad) return setError("Cantidad de personas inválida");
+    
+    // Verificar stock
+    const boteKey = `${bote}-${capacidad}`;
+    if ((stock[boteKey] || 0) <= 0) {
+      return setError("No hay disponibilidad para este tipo de bote");
+    }
 
     try {
       // Recuperar perfil del pescador de Firestore
@@ -111,6 +134,24 @@ const ReservarClub: React.FC = () => {
         createdAt: new Date(),
       });
 
+      // Actualizar stock en Firestore
+      if (clubId && club) {
+        const clubRef = doc(db, "clubs", clubId);
+        await updateDoc(clubRef, {
+          boats: club.boats.map(boat => 
+            boat.tipo === bote && boat.capacidad === capacidad
+              ? { ...boat, cantidad: (boat.cantidad || 0) - 1 }
+              : boat
+          )
+        });
+
+        // Actualizar stock local
+        setStock(prev => ({
+          ...prev,
+          [boteKey]: (prev[boteKey] || 0) - 1
+        }));
+      }
+
       // Crear notificación para el administrador del club
       if (clubId) {
         await addDoc(collection(db, "notifications"), {
@@ -133,6 +174,35 @@ const ReservarClub: React.FC = () => {
     }
   };
 
+  // Clasificar botes por tipo
+  const clasificarBotes = () => {
+    if (!club) return { conMotor: [], sinMotor: [], conTracker: [] };
+    
+    return club.boats.reduce<{ 
+      conMotor: Bote[]; 
+      sinMotor: Bote[]; 
+      conTracker: Bote[] 
+    }>((acc, bote) => {
+      const boteConStock: Bote = {
+        ...bote,
+        disponible: stock[`${bote.tipo}-${bote.capacidad}`] > 0,
+        stock: stock[`${bote.tipo}-${bote.capacidad}`] || 0
+      };
+      
+      if (bote.tipo.toLowerCase().includes('motor')) {
+        acc.conMotor.push(boteConStock);
+      } else if (bote.tipo.toLowerCase().includes('tracker')) {
+        acc.conTracker.push(boteConStock);
+      } else {
+        acc.sinMotor.push(boteConStock);
+      }
+      
+      return acc;
+    }, { conMotor: [], sinMotor: [], conTracker: [] });
+  };
+
+  const botesPorTipo = clasificarBotes();
+
   if (loading) return <div className="text-center mt-8">Cargando club...</div>;
   if (!club) return <div className="text-center mt-8 text-red-600">Club no encontrado.</div>;
 
@@ -149,22 +219,156 @@ const ReservarClub: React.FC = () => {
         </div>
         <form className="space-y-4" onSubmit={handleReservar}>
           <div>
-            <label className="block font-semibold mb-1">Tipo de Bote</label>
+            <label className="block font-semibold mb-2">Botes Disponibles</label>
+            
+            {/* Sección de Botes con Motor */}
+            {botesPorTipo.conMotor.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-semibold text-lg text-blue-800 mb-3 flex items-center">
+                  <span className="mr-2">🛥️</span> Botes con Motor
+                </h3>
+                <div className="space-y-3">
+                  {botesPorTipo.conMotor.map((b) => (
+                    <div 
+                      key={`${b.tipo}-${b.capacidad}`}
+                      className={`p-4 border-2 rounded-lg transition-all ${b.disponible ? 'hover:border-blue-300 hover:shadow-md cursor-pointer border-blue-100' : 'border-gray-200 opacity-70'}`}
+                      onClick={() => b.disponible && setBote(b.tipo)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-gray-800">{b.tipo}</h4>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Capacidad: <span className="font-medium">{b.capacidad} personas</span>
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          b.disponible 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {b.disponible ? `✅ ${b.stock} disponibles` : '❌ Sin stock'}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-right">
+                        <span className="text-lg font-bold text-blue-700">
+                          ${b.precio.toLocaleString('es-AR')}
+                        </span>
+                        <span className="text-sm text-gray-500 ml-1">/día</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sección de Botes sin Motor */}
+            {botesPorTipo.sinMotor.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-semibold text-lg text-blue-800 mb-3 flex items-center">
+                  <span className="mr-2">🚣</span> Botes a Remo
+                </h3>
+                <div className="space-y-3">
+                  {botesPorTipo.sinMotor.map((b) => (
+                    <div 
+                      key={`${b.tipo}-${b.capacidad}`}
+                      className={`p-4 border-2 rounded-lg transition-all ${b.disponible ? 'hover:border-blue-300 hover:shadow-md cursor-pointer border-blue-100' : 'border-gray-200 opacity-70'}`}
+                      onClick={() => b.disponible && setBote(b.tipo)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-gray-800">{b.tipo}</h4>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Capacidad: <span className="font-medium">{b.capacidad} personas</span>
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          b.disponible 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {b.disponible ? `✅ ${b.stock} disponibles` : '❌ Sin stock'}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-right">
+                        <span className="text-lg font-bold text-blue-700">
+                          ${b.precio.toLocaleString('es-AR')}
+                        </span>
+                        <span className="text-sm text-gray-500 ml-1">/día</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sección de Botes con Tracker */}
+            {botesPorTipo.conTracker.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-semibold text-lg text-blue-800 mb-3 flex items-center">
+                  <span className="mr-2">📍</span> Tracker
+                </h3>
+                <div className="space-y-3">
+                  {botesPorTipo.conTracker.map((b) => (
+                    <div 
+                      key={`${b.tipo}-${b.capacidad}`}
+                      className={`p-4 border-2 rounded-lg transition-all ${b.disponible ? 'hover:border-blue-300 hover:shadow-md cursor-pointer border-blue-100' : 'border-gray-200 opacity-70'}`}
+                      onClick={() => b.disponible && setBote(b.tipo)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-gray-800">{b.tipo}</h4>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Capacidad: <span className="font-medium">{b.capacidad} personas</span>
+                          </div>
+                          <div className="text-xs text-blue-600 mt-1">
+                            📍 Traker
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          b.disponible 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {b.disponible ? `✅ ${b.stock} disponibles` : '❌ Sin stock'}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-right">
+                        <span className="text-lg font-bold text-blue-700">
+                          ${b.precio.toLocaleString('es-AR')}
+                        </span>
+                        <span className="text-sm text-gray-500 ml-1">/día</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Select oculto para mantener la selección del formulario */}
             <select
-              className="w-full border rounded-md px-3 py-2"
+              className="hidden"
               value={bote}
               onChange={(e) => setBote(e.target.value)}
               required
             >
               <option value="">Seleccioná un bote</option>
-              {club.boats.filter(b => b.cantidad > 0).map((b) => (
-                <option key={`${b.tipo}-${b.capacidad}`} value={b.tipo}>
-                  {b.tipo} (capacidad {b.capacidad}) - ${b.precio}
-                </option>
-              ))}
+              {club.boats
+                .filter(b => b.cantidad > 0)
+                .map((b) => (
+                  <option key={`${b.tipo}-${b.capacidad}`} value={b.tipo}>
+                    {b.tipo}
+                  </option>
+                ))}
             </select>
           </div>
           <div>
+            {bote && (
+              <div className="text-sm text-gray-600 mb-2">
+                {stock[`${bote}-${capacidad}`] > 0 
+                  ? `✅ ${stock[`${bote}-${capacidad}`]} disponibles`
+                  : "❌ No hay disponibilidad"}
+              </div>
+            )}
             <label className="block font-semibold mb-1">Cantidad de personas</label>
             <input
               className="w-full border rounded-md px-3 py-2"
