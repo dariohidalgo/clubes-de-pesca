@@ -5,7 +5,7 @@ const LandingPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 py-0 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto text-center py-12 px-4 sm:px-6 lg:py-16 lg:px-8">
         <h1 className="text-4xl font-extrabold tracking-tight text-blue-900 sm:text-5xl md:text-6xl">
           <span className="block">Bienvenido a</span>
@@ -20,9 +20,7 @@ const LandingPage: React.FC = () => {
           <div className="bg-white rounded-lg shadow-xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
             <div className="p-8 text-center">
               <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-blue-100 text-blue-600 mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
-                </svg>
+                <img src="/fish-favicon.svg" alt="Logo" className="h-10 w-10" />
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-4">Para Pescadores</h3>
               <p className="text-gray-600 mb-6">

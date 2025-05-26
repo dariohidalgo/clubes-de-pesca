@@ -7,6 +7,7 @@ import { useNavigate, Link } from 'react-router-dom';
 const RegisterFisher: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [nombre, setNombre] = useState('');
   const [celular, setCelular] = useState('');
   const [error, setError] = useState('');
@@ -16,6 +17,19 @@ const RegisterFisher: React.FC = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Validar que las contraseñas coincidan
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden');
+      return;
+    }
+    
+    // Validar longitud mínima de contraseña
+    if (password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    
     setLoading(true);
     try {
       // 1. Crear usuario en Auth
@@ -65,28 +79,50 @@ const RegisterFisher: React.FC = () => {
         />
         <input
           className="w-full px-4 py-2 border rounded-md"
-          type="email"
-          placeholder="Correo electrónico"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          required
-        />
-        <input
-          className="w-full px-4 py-2 border rounded-md"
           type="text"
-          placeholder="Celular"
+          placeholder="Ej: 351 1234-5678"
           value={celular}
           onChange={e => setCelular(e.target.value)}
           required
         />
         <input
           className="w-full px-4 py-2 border rounded-md"
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
+          type="email"
+          placeholder="Correo electrónico"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
           required
         />
+        
+        <div className="mb-4">
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            Contraseña
+          </label>
+          <input
+            type="password"
+            id="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+            
+            minLength={6}
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+            Confirmar Contraseña
+          </label>
+          <input
+            type="password"
+            id="confirmPassword"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+            minLength={6}
+          />
+        </div>
         {error && <div className="text-red-500 text-center">{error}</div>}
         <button
           type="submit"
