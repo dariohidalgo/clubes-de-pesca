@@ -22,6 +22,7 @@ import FisherDashboard from './fishers/pages/FisherDashboard';
 import FisherBookings from './fishers/pages/FisherBookings';   
 import FisherLayout from './fishers/pages/FisherLayout';
 import ReservarClub from './fishers/pages/ReservarClub';
+import FishingZones from './fishers/pages/FishingZones';
 
 import './App.css';
 
@@ -75,6 +76,7 @@ const App: React.FC = () => {
           <Route path="dashboard" element={<FisherDashboard />} />
           <Route path="reservas" element={<FisherBookings />} />
           <Route path="reservar/:clubId" element={<ReservarClub />} />
+          <Route path="zonas-pesca" element={<FishingZones />} />
         </Route>
         
         {/* Catch-all */}

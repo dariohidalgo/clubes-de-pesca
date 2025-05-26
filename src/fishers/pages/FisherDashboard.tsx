@@ -39,7 +39,7 @@ const FisherDashboard: React.FC = () => {
   return (
     <div className="w-full px-4 sm:px-6 py-6">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl mt-8 sm:text-3xl font-bold text-center mb-6 sm:mb-8 text-blue-800 px-2">
+        <h1 className="text-2xl mt-1 sm:text-3xl font-bold text-center mb-6 sm:mb-8 text-blue-800 px-2">
           Reservá tu Club de Pesca
         </h1>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full">

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { auth, db } from '../../../firebaseConfig';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
-import { format, parseISO, addHours, isBefore, differenceInHours } from 'date-fns';
+import { format, parseISO, differenceInHours } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ClimaCard from '../clima/WeatherCard';
 import { Dialog, Transition } from '@headlessui/react';
@@ -188,24 +188,24 @@ const FisherBookings: React.FC = () => {
       const fechaActualizada = modifyData.fecha || selectedReserva.fecha;
       const mensajeModificacion = 'Reserva modificada por el usuario. Esperando confirmación.';
       
-      // Crear objeto con los datos actualizados
-      const datosActualizados: Partial<Reserva> = {
-        personas: modifyData.personas,
-        mojarras: modifyData.mojarras,
-        fecha: fechaActualizada,
-        mensaje: mensajeModificacion,
-        estado: 'pendiente', // Cambiar a pendiente para que el administrador revise los cambios
-        actualizadoEl: new Date().toISOString(),
-        // Mantener el historial de modificaciones
-        historial: [
-          ...(selectedReserva.historial || []),
-          {
-            fecha: new Date().toISOString(),
-            accion: 'modificacion',
-            detalles: `Usuario modificó la reserva: ${modifyData.personas} personas, ${modifyData.mojarras} mojarras, ${fechaActualizada}`
-          }
-        ]
-      };
+      // // Crear objeto con los datos actualizados
+      // const datosActualizados: Partial<Reserva> = {
+      //   personas: modifyData.personas,
+      //   mojarras: modifyData.mojarras,
+      //   fecha: fechaActualizada,
+      //   mensaje: mensajeModificacion,
+      //   estado: 'pendiente', // Cambiar a pendiente para que el administrador revise los cambios
+      //   actualizadoEl: new Date().toISOString(),
+      //   // Mantener el historial de modificaciones
+      //   historial: [
+      //     ...(selectedReserva.historial || []),
+      //     {
+      //       fecha: new Date().toISOString(),
+      //       accion: 'modificacion',
+      //       detalles: `Usuario modificó la reserva: ${modifyData.personas} personas, ${modifyData.mojarras} mojarras, ${fechaActualizada}`
+      //     }
+      //   ]
+      // };
       
       // Actualizar la reserva en Firestore con tipos explícitos
       const updateData = {
