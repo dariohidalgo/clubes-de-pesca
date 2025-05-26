@@ -5,6 +5,7 @@ interface Boat {
   cantidad: number;
   capacidad: number;
   precio: number;
+  disponible?: boolean;
 }
 
 interface ClubCardProps {
@@ -24,7 +25,25 @@ const ClubCard: React.FC<ClubCardProps> = ({
   boats,
   onReservar,
 }) => {
-  const botesDisponibles = boats.reduce((acc, b) => acc + (b.cantidad ?? 0), 0);
+  // Clasificar botes por tipo
+  const clasificarBotes = () => {
+    return boats.reduce<{ 
+      conMotor: Boat[]; 
+      sinMotor: Boat[]; 
+      conTracker: Boat[] 
+    }>((acc, bote) => {
+      if (bote.tipo.toLowerCase().includes('motor')) {
+        acc.conMotor.push(bote);
+      } else if (bote.tipo.toLowerCase().includes('tracker')) {
+        acc.conTracker.push(bote);
+      } else {
+        acc.sinMotor.push(bote);
+      }
+      return acc;
+    }, { conMotor: [], sinMotor: [], conTracker: [] });
+  };
+
+  const botesPorTipo = clasificarBotes();
 
   return (
     <div className="bg-white shadow-md hover:shadow-lg rounded-xl p-4 sm:p-6 flex flex-col items-center w-full max-w-sm transition-shadow duration-300">
@@ -67,11 +86,57 @@ const ClubCard: React.FC<ClubCardProps> = ({
         </div>
       </div>
       
-      <div className="w-full mt-2 mb-4 px-2">
-        <div className="bg-blue-50 rounded-lg p-3 text-center">
-          <span className="text-sm sm:text-base font-medium text-gray-700">
-            🚤 <span className="font-bold text-green-700">{botesDisponibles}</span> botes disponibles
-          </span>
+      <div className="w-full mt-2 mb-4 px-2 space-y-4">
+        {/* Mensaje de disponibilidad */}
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r">
+          <p className="text-sm text-yellow-700">
+            ⚠️ La disponibilidad puede variar según la fecha seleccionada al realizar la reserva.
+          </p>
+        </div>
+        
+        {/* Resumen de botes por categoría */}
+        <div className="space-y-3">
+          {botesPorTipo.conMotor.length > 0 && (
+            <div className="bg-blue-50 rounded-lg p-3">
+              <h3 className="font-medium text-blue-800 text-sm mb-1">🛥️ Botes</h3>
+              <div className="space-y-1">
+                {botesPorTipo.conMotor.map((b, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span>{b.tipo} ({b.capacidad} pers.)</span>
+                    <span className="font-medium">{b.cantidad} disponibles</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {botesPorTipo.sinMotor.length > 0 && (
+            <div className="bg-green-50 rounded-lg p-3">
+              <h3 className="font-medium text-green-800 text-sm mb-1">🚣 Sin Motor</h3>
+              <div className="space-y-1">
+                {botesPorTipo.sinMotor.map((b, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span>{b.tipo} ({b.capacidad} pers.)</span>
+                    <span className="font-medium">{b.cantidad} disponibles</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {botesPorTipo.conTracker.length > 0 && (
+            <div className="bg-purple-50 rounded-lg p-3">
+              <h3 className="font-medium text-purple-800 text-sm mb-1">📍Tracker</h3>
+              <div className="space-y-1">
+                {botesPorTipo.conTracker.map((b, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span>{b.tipo} ({b.capacidad} pers.)</span>
+                    <span className="font-medium">{b.cantidad} disponibles</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       

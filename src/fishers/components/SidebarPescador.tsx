@@ -84,7 +84,7 @@ const SidebarPescador: React.FC = () => {
                 onClick={closeMobileMenu}
               >
                 <User className="w-5 h-5" />
-                Mi Perfil
+                Clubes
               </NavLink>
               <NavLink
                 to="/fisher/reservas"
