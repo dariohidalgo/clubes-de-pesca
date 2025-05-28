@@ -236,9 +236,7 @@ const ReservarClub: React.FC = () => {
         const anio = fechaReservaAjustada.getFullYear();
         const fechaReservaFormateada = `${dia}/${mes}/${anio}`;
         
-        console.log('Fecha de reserva original:', fecha);
-        console.log('Fecha de reserva ajustada:', fechaReservaAjustada);
-        console.log('Fecha de reserva formateada:', fechaReservaFormateada);
+   
 
         await addDoc(collection(db, "notifications"), {
           clubId,

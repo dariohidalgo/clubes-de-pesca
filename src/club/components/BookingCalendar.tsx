@@ -123,13 +123,10 @@ const BookingCalendar: React.FC = () => {
           const data = docu.data();
           
           // Debug: Mostrar la fecha como viene de la base de datos
-          console.log('Fecha de la BD (raw):', data.fecha);
-          console.log('Tipo de dato:', typeof data.fecha);
+       
           if (data.fecha) {
             const fecha = new Date(data.fecha);
-            console.log('Fecha convertida a Date:', fecha);
-            console.log('Fecha local:', fecha.toLocaleString('es-AR'));
-            console.log('Timestamp:', fecha.getTime());
+ 
           }
           
           reservasList.push({ 
@@ -195,15 +192,7 @@ const BookingCalendar: React.FC = () => {
     // Usamos el mediodía para evitar problemas con cambios de horario
     const fecha = new Date(year, month - 1, day, 12, 0, 0);
     
-    // Asegurarse de que la fecha sea correcta
-    console.log('Fecha procesada:', {
-      input: fechaStr,
-      output: fecha.toString(),
-      localDate: fecha.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }),
-      day: fecha.getDate(),
-      month: fecha.getMonth() + 1,
-      year: fecha.getFullYear()
-    });
+   
     
     return fecha;
   };
@@ -654,10 +643,10 @@ const BookingCalendar: React.FC = () => {
                 // Formatear manualmente la fecha
                 const fechaFormateada = `${diaSemana} ${parseInt(day)} de ${nombreMes} de ${year} `;
                 
-                console.log('Fecha en tarjeta:', {
-                  input: res.fecha,
-                  formateada: fechaFormateada
-                });
+           // Eliminar este bloque si no se necesita
+           // if (data.fecha) {
+           //   const fecha = new Date(data.fecha);
+           // }
                 
                 // No mostramos la hora ya que no es relevante para la fecha de reserva
                 const horaFormateada = '';

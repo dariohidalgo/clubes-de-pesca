@@ -67,20 +67,20 @@ const FisherBookings: React.FC = () => {
       const querySnapshot = await getDocs(q);
       const reservasList: Reserva[] = [];
       
-      console.log('Cargando reservas desde Firestore...');
+   
       const reservasVistas = new Set<string>();
       
       querySnapshot.forEach(doc => {
         const reservaId = doc.id;
         if (!reservasVistas.has(reservaId)) {
           const reservaData = doc.data() as Omit<Reserva, 'id'>;
-          console.log('Reserva ID:', reservaId, 'Fecha:', reservaData.fecha, 'Estado:', reservaData.estado);
+    
           reservasList.push({ id: reservaId, ...reservaData });
           reservasVistas.add(reservaId);
         }
       });
       
-      console.log('Total de reservas únicas cargadas:', reservasList.length);
+     
       setReservas(reservasList);
     } catch (error) {
       console.error("Error trayendo reservas:", error);
@@ -137,9 +137,7 @@ const FisherBookings: React.FC = () => {
       const diferenciaMs = fechaReservaLocal.getTime() - ahoraLocal.getTime();
       const diferenciaHoras = Math.floor(diferenciaMs / (1000 * 60 * 60));
       
-      console.log('Verificando cancelación - Fecha reserva:', fechaReservaLocal.toISOString(), 
-                 'Ahora:', ahoraLocal.toISOString(), 
-                 'Diferencia horas:', diferenciaHoras);
+     
       
       return diferenciaHoras > 48;
     } catch (e) {
@@ -164,9 +162,8 @@ const FisherBookings: React.FC = () => {
       const diferenciaMs = fechaReservaLocal.getTime() - ahoraLocal.getTime();
       const diferenciaHoras = Math.floor(diferenciaMs / (1000 * 60 * 60));
       
-      console.log('Verificando modificación - Fecha reserva:', fechaReservaLocal.toISOString(), 
-                 'Ahora:', ahoraLocal.toISOString(), 
-                 'Diferencia horas:', diferenciaHoras);
+
+
       
       return diferenciaHoras > 24;
     } catch (e) {
