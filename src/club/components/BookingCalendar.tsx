@@ -17,7 +17,7 @@ interface Reserva {
   personas: number;
   mojarras: number;
   fecha: string; // ISO string
-  estado: "pendiente" | "confirmada" | "eliminada" | "cancelada" | string;
+  estado: "pendiente" | "confirmada" | "eliminada" | "cancelada";
   mensaje?: string;
   total?: number;
   userId?: string; // Add userId to the interface
@@ -59,7 +59,6 @@ const BookingCalendar: React.FC = () => {
           const reservaData = { id: docSnap.id, ...docSnap.data() } as Reserva;
           setReservaDetalle(reservaData);
           
-          // Si la reserva tiene fecha, la establecemos como fecha seleccionada
           if (docSnap.data().fecha) {
             setSelectedDate(new Date(docSnap.data().fecha));
           }
@@ -67,27 +66,22 @@ const BookingCalendar: React.FC = () => {
           // Verificar si venimos de una notificación o si debemos mostrar el modal
           const fromNotification = location.state?.fromNotification === true;
           const shouldShowModal = location.state?.shouldShowModal === true;
+          const fromBackButton = location.state?.fromBackButton === true;
           
-          // Mostrar el modal si venimos de una notificación, si debemos mostrarlo o si la reserva está pendiente
-          if (fromNotification || shouldShowModal || reservaData.estado === 'pendiente') {
+          // Mostrar el modal solo si no venimos del botón de volver y se cumplen las condiciones
+          if (!fromBackButton && (fromNotification || shouldShowModal || reservaData.estado === 'pendiente')) {
             const accion = location.state?.accion || 'confirmar';
-            // Usar setTimeout para asegurar que el estado se actualice después del renderizado
-            setTimeout(() => {
-              setModalReserva(reservaData);
-              setModalAccion(accion);
-              setMensaje(accion === 'confirmar' 
-                ? `¡Hola ${reservaData.nombre}! Tu reserva ha sido confirmada. ¡Te esperamos!`
-                : `Lamentamos informarte que tu reserva ha sido cancelada.`);
-            }, 100);
+            setModalReserva(reservaData);
+            setModalAccion(accion);
+            setMensaje(accion === 'confirmar' 
+              ? `¡Hola ${reservaData.nombre}! Tu reserva ha sido confirmada. ¡Te esperamos!`
+              : `Lamentamos informarte que tu reserva ha sido cancelada.`);
           }
           
-          // Limpiar el estado de navegación para la próxima vez
+          // Limpiar el estado de navegación si venimos de una notificación o acción
           if (fromNotification || shouldShowModal) {
             window.history.replaceState({}, document.title);
           }
-        } else {
-          console.log("No se encontró la reserva");
-          navigate('/club/reservas', { replace: true });
         }
       } catch (error) {
         console.error("Error al cargar la reserva:", error);
@@ -95,18 +89,18 @@ const BookingCalendar: React.FC = () => {
         setLoading(false);
       }
     };
-
+    
+    // Resetear estados del modal al cargar una nueva reserva
+    setModalReserva(null);
+    setModalAccion(null);
+    setMensaje("");
+    
     if (reservaId) {
-      // Resetear estados del modal al cargar una nueva reserva
-      setModalReserva(null);
-      setModalAccion(null);
-      setMensaje("");
-      
       fetchReservaDetalle();
     } else {
       setReservaDetalle(null);
     }
-  }, [reservaId, navigate]);
+  }, [reservaId, navigate, location.state]);
 
   // Cargar reservas de Firestore filtradas por clubId
   useEffect(() => {
@@ -114,32 +108,68 @@ const BookingCalendar: React.FC = () => {
       const user = auth.currentUser;
       if (!user) return;
 
-      // Buscar el clubId (que es el uid del usuario logueado)
-      const clubId = user.uid;
+      try {
+        // Buscar el clubId (que es el uid del usuario logueado)
+        const clubId = user.uid;
+       
 
-      // Consultar todas las reservas para este club
-      const reservasRef = collection(db, "reservas");
-      const q = query(reservasRef, where("clubId", "==", clubId));
-      const querySnapshot = await getDocs(q);
-      const reservasList: Reserva[] = [];
-      querySnapshot.forEach(docu => {
-        reservasList.push({ id: docu.id, ...docu.data() } as Reserva);
-      });
-      setReservas(reservasList);
+        // Consultar todas las reservas para este club
+        const reservasRef = collection(db, "reservas");
+        const q = query(reservasRef, where("clubId", "==", clubId));
+        const querySnapshot = await getDocs(q);
+        
+        const reservasList: Reserva[] = [];
+        querySnapshot.forEach(docu => {
+          const data = docu.data();
+          
+          // Debug: Mostrar la fecha como viene de la base de datos
+          console.log('Fecha de la BD (raw):', data.fecha);
+          console.log('Tipo de dato:', typeof data.fecha);
+          if (data.fecha) {
+            const fecha = new Date(data.fecha);
+            console.log('Fecha convertida a Date:', fecha);
+            console.log('Fecha local:', fecha.toLocaleString('es-AR'));
+            console.log('Timestamp:', fecha.getTime());
+          }
+          
+          reservasList.push({ 
+            id: docu.id, 
+            ...data,
+            estado: data.estado || 'pendiente' // Asegurar que siempre haya un estado
+          } as Reserva);
+        });
+        
+        
+        setReservas(reservasList);
+      } catch (error) {
+        console.error('Error al cargar las reservas:', error);
+      }
     };
+    
     fetchReservas();
   }, []);
 
   // Cerrar vista de detalle
-  const handleCerrarDetalle = () => {
-    navigate('/club/reservas');
+  const handleCerrarDetalle = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    // Limpiar el estado de navegación antes de navegar
+    window.history.replaceState({}, document.title);
+    // Navegar sin estado adicional para evitar el modal
+    navigate('/club/reservas', { replace: true });
   };
 
   // Función para abrir el modal de confirmación o cancelación
   const abrirModal = (reserva: Reserva, accion: 'confirmar' | 'eliminar') => {
     // Si estamos en la vista de detalle, primero volvemos al listado
     if (reservaId) {
+      // Limpiar el estado actual antes de navegar
+      window.history.replaceState({}, document.title);
+      // Navegar con el estado necesario para mostrar el modal
       navigate('/club/reservas', {
+        replace: true,
         state: { 
           shouldShowModal: true,
           reservaId: reserva.id,
@@ -156,6 +186,35 @@ const BookingCalendar: React.FC = () => {
     }
   };
 
+  // Función para crear fecha sin problemas de zona horaria
+  const crearFechaLocal = (fechaStr: string) => {
+    // Crear la fecha en la zona horaria local directamente
+    const [year, month, day] = fechaStr.split('-').map(Number);
+    
+    // Crear la fecha en la zona horaria local
+    // Usamos el mediodía para evitar problemas con cambios de horario
+    const fecha = new Date(year, month - 1, day, 12, 0, 0);
+    
+    // Asegurarse de que la fecha sea correcta
+    console.log('Fecha procesada:', {
+      input: fechaStr,
+      output: fecha.toString(),
+      localDate: fecha.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }),
+      day: fecha.getDate(),
+      month: fecha.getMonth() + 1,
+      year: fecha.getFullYear()
+    });
+    
+    return fecha;
+  };
+
+  // Función para comparar fechas ignorando la hora
+  const sonElMismoDia = (fecha1: Date, fecha2: Date) => {
+    return fecha1.getFullYear() === fecha2.getFullYear() &&
+           fecha1.getMonth() === fecha2.getMonth() &&
+           fecha1.getDate() === fecha2.getDate();
+  };
+
   // Si estamos cargando una reserva específica, mostrar loading
   if (loading) {
     return (
@@ -167,14 +226,28 @@ const BookingCalendar: React.FC = () => {
 
   // Mostrar vista de detalle de reserva si hay una reserva seleccionada y estamos en la ruta de detalle
   if (reservaDetalle && reservaId) {
-    const fecha = new Date(reservaDetalle.fecha);
-    const fechaFormateada = fecha.toLocaleDateString('es-AR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Extraer día, mes y año directamente del string
+    const [year, month, day] = reservaDetalle.fecha.split('-');
+    
+    // Crear arrays con los nombres de los meses y días en español
+    const meses = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ];
+    
+    const dias = [
+      'domingo', 'lunes', 'martes', 'miércoles', 
+      'jueves', 'viernes', 'sábado'
+    ];
+    
+    // Crear una fecha para obtener el día de la semana
+    const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const diaSemana = dias[fecha.getDay()];
+    const nombreMes = meses[parseInt(month) - 1];
+    
+    // Formatear manualmente la fecha
+    const fechaFormateada = `${diaSemana} ${parseInt(day)} de ${nombreMes} de ${year} + `;
+  
 
     return (
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 max-w-2xl mx-auto w-full">
@@ -220,7 +293,7 @@ const BookingCalendar: React.FC = () => {
                     <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {fechaFormateada}
+                    <span className="whitespace-nowrap">{fechaFormateada}</span>
                   </div>
                   <div className="flex items-center">
                     <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,38 +387,41 @@ const BookingCalendar: React.FC = () => {
     );
   }
 
+
+  
+
+
   // Filtrar reservas según la vista (día/mes) y estado
   const reservasFiltradas = reservas.filter((res) => {
-    if (!res.fecha) return false;
-    
     try {
-      const fechaReserva = new Date(res.fecha);
+      // Verificar si la reserva tiene fecha
+      if (!res.fecha) {
+        return false;
+      }
       
-      // Asegurarse de que la fecha es válida
-      if (isNaN(fechaReserva.getTime())) return false;
+      // Aplicar filtro de estado
+      if (filtroEstado !== 'todas') {
+        if (filtroEstado === 'pendiente' && res.estado !== 'pendiente') {
+          return false;
+        } else if (filtroEstado === 'confirmada' && res.estado !== 'confirmada') {
+          return false;
+        } else if (filtroEstado === 'eliminada' && res.estado !== 'eliminada' && res.estado !== 'cancelada') {
+          return false;
+        }
+      }
       
-      // Normalizar fechas para comparación (ignorar hora)
-      const fechaReservaNormalizada = new Date(
-        fechaReserva.getFullYear(), 
-        fechaReserva.getMonth(), 
-        fechaReserva.getDate()
-      );
+      // Procesar la fecha
+      const fechaReserva = crearFechaLocal(res.fecha);
+      if (isNaN(fechaReserva.getTime())) {
+        return false;
+      }
       
-      const fechaSeleccionadaNormalizada = new Date(
-        selectedDate.getFullYear(),
-        selectedDate.getMonth(),
-        selectedDate.getDate()
-      );
+      // Verificar si la reserva coincide con la vista actual (día o mes)
+      const esMismoDia = sonElMismoDia(fechaReserva, selectedDate);
+      const esMismoMes = fechaReserva.getMonth() === selectedDate.getMonth() &&
+                        fechaReserva.getFullYear() === selectedDate.getFullYear();
       
-      const esMismoDia = fechaReservaNormalizada.getTime() === fechaSeleccionadaNormalizada.getTime();
-      const esMismoMes = 
-        fechaReserva.getMonth() === selectedDate.getMonth() && 
-        fechaReserva.getFullYear() === selectedDate.getFullYear();
-        
-      const coincideVista = vistaReservas === 'dia' ? esMismoDia : esMismoMes;
-      const coincideEstado = filtroEstado === 'todas' || res.estado === filtroEstado;
-      
-      return coincideVista && coincideEstado;
+      return vistaReservas === 'dia' ? esMismoDia : esMismoMes;
     } catch (error) {
       console.error('Error al procesar fecha de reserva:', error, res);
       return false;
@@ -371,7 +447,7 @@ const BookingCalendar: React.FC = () => {
   };
 
   // Confirmar o eliminar reservas (actualiza la reserva en la colección 'reservas')
-  const cambiarEstadoReserva = async (reserva: Reserva, nuevoEstado: string, mensaje?: string) => {
+  const cambiarEstadoReserva = async (reserva: Reserva, nuevoEstado: Reserva['estado'], mensaje?: string) => {
     if (!reserva.id) return;
 
     try {
@@ -555,29 +631,55 @@ const BookingCalendar: React.FC = () => {
             {/* Versión móvil: Tarjetas */}
             <div className="sm:hidden space-y-3">
               {reservasPaginadas.map((res) => {
-                const fecha = new Date(res.fecha);
-                const fechaFormateada = fecha.toLocaleDateString('es-AR', {
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit'
+                // Extraer día, mes y año directamente del string
+                const [year, month, day] = res.fecha.split('-');
+                
+                // Crear un array con los nombres de los meses
+                const meses = [
+                  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+                ];
+                
+                // Crear un array con los días de la semana
+                const dias = [
+                  'domingo', 'lunes', 'martes', 'miércoles', 
+                  'jueves', 'viernes', 'sábado'
+                ];
+                
+                // Crear una fecha para obtener el día de la semana
+                const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                const diaSemana = dias[fecha.getDay()];
+                const nombreMes = meses[parseInt(month) - 1];
+                
+                // Formatear manualmente la fecha
+                const fechaFormateada = `${diaSemana} ${parseInt(day)} de ${nombreMes} de ${year} `;
+                
+                console.log('Fecha en tarjeta:', {
+                  input: res.fecha,
+                  formateada: fechaFormateada
                 });
+                
+                // No mostramos la hora ya que no es relevante para la fecha de reserva
+                const horaFormateada = '';
                 
                 return (
                 <div key={res.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   {/* Header con fecha y estado */}
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                    <div className="text-sm font-medium text-gray-900">{fechaFormateada}</div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                      res.estado === 'confirmada' ? 'bg-green-100 text-green-800' :
-                      res.estado === 'eliminada' || res.estado === 'cancelada' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {res.estado === "confirmada" ? "Confirmada" : 
-                       res.estado === "eliminada" || res.estado === "cancelada" ? "Cancelada" : 
-                       "Pendiente"}
-                    </span>
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm font-medium text-gray-900">
+                        {fechaFormateada} - {horaFormateada}
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                        res.estado === 'confirmada' ? 'bg-green-100 text-green-800' :
+                        res.estado === 'eliminada' || res.estado === 'cancelada' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {res.estado === "confirmada" ? "Confirmada" : 
+                         res.estado === "eliminada" || res.estado === "cancelada" ? "Cancelada" : 
+                         "Pendiente"}
+                      </span>
+                    </div>
                   </div>
                   
                   {/* Contenido principal */}
@@ -598,12 +700,15 @@ const BookingCalendar: React.FC = () => {
                       </a>
                     </div>
                     
-                    <div className="space-y-2 text-sm text-gray-600">
-                      <div className="flex items-center">
-                        <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        {fechaFormateada}
+                    <div className="space-y-2 text-sm">
+                      <div className="bg-blue-50 text-blue-700 px-3 py-2 rounded-lg mb-2">
+                        <div className="font-medium text-sm">Fecha de la reserva</div>
+                        <div className="flex items-center mt-1">
+                          <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span className="font-semibold">{fechaFormateada}</span>
+                        </div>
                       </div>
                       <div className="flex items-center">
                         <svg className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -630,25 +735,52 @@ const BookingCalendar: React.FC = () => {
                     {res.estado === "pendiente" && (
                       <div className="w-full mt-4">
                         <div className="flex flex-col sm:flex-row gap-2">
-                          <button
-                            className="flex-1 flex items-center justify-center px-3 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors whitespace-nowrap"
-                            onClick={() => abrirModal(res, 'confirmar')}
-                          >
-                            <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Confirmar
-                          </button>
-                          <button
-                            className="flex-1 flex items-center justify-center px-3 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors whitespace-nowrap"
-                            onClick={() => abrirModal(res, 'eliminar')}
-                          >
-                            <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                            Cancelar
-                          </button>
-                        </div>
+                      {res.estado === 'pendiente' ? (
+                        <button
+                          className="flex-1 flex items-center justify-center px-3 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors whitespace-nowrap"
+                          onClick={() => abrirModal(res, 'confirmar')}
+                        >
+                          <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Confirmar
+                        </button>
+                      ) : (
+                        <button
+                          className="flex-1 flex items-center justify-center px-3 py-2.5 bg-green-100 text-green-800 rounded-lg text-sm font-medium cursor-not-allowed whitespace-nowrap"
+                          disabled
+                          title="Solo se pueden confirmar reservas pendientes"
+                        >
+                          <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {res.estado === 'confirmada' ? 'Confirmada' : 'Confirmar'}
+                        </button>
+                      )}
+                      
+                      {(res.estado === 'pendiente' || res.estado === 'confirmada') ? (
+                        <button
+                          className="flex-1 flex items-center justify-center px-3 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors whitespace-nowrap"
+                          onClick={() => abrirModal(res, 'eliminar')}
+                        >
+                          <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Cancelar
+                        </button>
+                      ) : (
+                        <button
+                          className="flex-1 flex items-center justify-center px-3 py-2.5 bg-red-100 text-red-800 rounded-lg text-sm font-medium cursor-not-allowed whitespace-nowrap"
+                          disabled
+                          title="No se puede cancelar una reserva ya cancelada o eliminada"
+                        >
+                          <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          {res.estado === 'eliminada' || res.estado === 'cancelada' ? 'Cancelada' : 'Cancelar'}
+                        </button>
+                      )}
+                    </div>
                       </div>
                     )}
                   </div>
@@ -677,25 +809,32 @@ const BookingCalendar: React.FC = () => {
                         <div className="font-medium text-gray-900">{res.nombre}</div>
                         <div className="text-sm text-gray-500">{res.email}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{res.celular}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="text-gray-900">{res.celular}</div>
+                        <div className="text-xs text-red-500">
+                          {crearFechaLocal(res.fecha).toLocaleDateString('es-AR', {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            timeZone: 'America/Argentina/Buenos_Aires'
+                          })}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-900">{res.bote}</td>
                       <td className="px-4 py-3 text-sm text-center text-gray-500">{res.personas}</td>
                       <td className="px-4 py-3 text-sm text-center text-gray-500">
                         {res.mojarras > 0 ? `🐟 ${res.mojarras}` : '-'}
                       </td>
-                      <td className="px-4 py-2 font-semibold text-green-700">
-        {res.total !== undefined
-          ? `$${Number(res.total).toLocaleString("es-AR")}`
-          : "--"}
-      </td>
-      
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           res.estado === 'confirmada' ? 'bg-green-100 text-green-800' :
-                          res.estado === 'eliminada' ? 'bg-red-100 text-red-800' :
+                          res.estado === 'eliminada' || res.estado === 'cancelada' ? 'bg-red-100 text-red-800' :
                           'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {res.estado === "confirmada" ? "Confirmada" : res.estado === "eliminada" ? "Eliminada" : "Pendiente"}
+                          {res.estado === "confirmada" ? "Confirmada" : 
+                           res.estado === "eliminada" || res.estado === "cancelada" ? "Cancelada" : 
+                           "Pendiente"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">

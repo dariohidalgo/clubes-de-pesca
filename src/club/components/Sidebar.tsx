@@ -1,6 +1,6 @@
 // src/club/components/Sidebar.tsx
 import { Link, useLocation } from 'react-router-dom';
-import { CalendarDays, Bell, Fish, Ship, ClipboardList, Menu, X } from 'lucide-react';
+import { CalendarDays, Bell, Fish, Ship, ClipboardList, Menu, X, Star } from 'lucide-react';
 import LogoutButton from "../../auth/LogoutButton";
 import { useState, useEffect } from 'react';
 
@@ -9,6 +9,7 @@ const navLinks = [
   { to: '/club/reservas', label: 'Reservas', icon: <CalendarDays className="w-5 h-5" /> },
   { to: '/club/botes', label: 'Botes', icon: <Ship className="w-5 h-5" /> },
   { to: '/club/carnadas', label: 'Carnadas', icon: <Fish className="w-5 h-5" /> },
+  { to: '/club/calificaciones', label: 'Calificaciones', icon: <Star className="w-5 h-5" /> },
   { to: '/club/notificaciones', label: 'Notificaciones', icon: <Bell className="w-5 h-5" /> },
 ];
 
@@ -91,7 +92,7 @@ const Sidebar: React.FC = () => {
                 <span className="text-blue-600">{icon}</span> {label}
               </Link>
             ))}
-            <div className="mt-2" onClick={closeMobileMenu}>
+            <div className="mt-2 mx-auto" onClick={closeMobileMenu}>
               <LogoutButton />
             </div>
           </nav>

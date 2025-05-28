@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { auth, db } from '../../../firebaseConfig';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
-import { format, parseISO, differenceInHours } from 'date-fns';
-import { es } from 'date-fns/locale';
-import ClimaCard from '../clima/WeatherCard';
+import { collection, query, where, getDocs, doc, updateDoc, Timestamp, addDoc, serverTimestamp } from 'firebase/firestore';
+
+import { toast } from 'react-toastify';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
-import { toast } from 'react-toastify';
+import ClubRatingModal from '../components/ClubRatingModal';
 
 interface HistorialItem {
   fecha: string;
@@ -23,7 +22,7 @@ interface Reserva {
   personas: number;
   mojarras: number;
   fecha: string;
-  estado: 'pendiente' | 'confirmada' | 'cancelada';
+  estado: 'pendiente' | 'confirmada' | 'completada' | 'cancelada';
   mensaje?: string;
   total?: number;
   precioBote?: number;
@@ -33,6 +32,8 @@ interface Reserva {
   actualizadoEl?: string;
   userId?: string;
   historial?: HistorialItem[];
+  fechaTimestamp?: Timestamp;
+  canceladoPor?: 'club' | 'fisher';
 }
 
 type FiltroEstado = 'todas' | 'pendiente' | 'confirmada' | 'cancelada';
@@ -49,78 +50,203 @@ const FisherBookings: React.FC = () => {
   });
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showModifyDialog, setShowModifyDialog] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [selectedClub] = useState<{id: string, name: string} | null>(null);
 
-  useEffect(() => {
-    const fetchReservas = async () => {
-      setLoading(true);
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
+  // Usar useCallback para memoizar la función de carga
+  const cargarReservas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
 
-        const q = query(
-          collection(db, 'reservas'),
-          where('userId', '==', user.uid)
-        );
-        const querySnapshot = await getDocs(q);
-        const reservasList: Reserva[] = [];
-        querySnapshot.forEach(doc => {
-          reservasList.push({ id: doc.id, ...doc.data() } as Reserva);
-        });
-        setReservas(reservasList);
-      } catch (error) {
-        console.error("Error trayendo reservas:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReservas();
+      const q = query(
+        collection(db, 'reservas'),
+        where('userId', '==', user.uid)
+      );
+      const querySnapshot = await getDocs(q);
+      const reservasList: Reserva[] = [];
+      
+      console.log('Cargando reservas desde Firestore...');
+      const reservasVistas = new Set<string>();
+      
+      querySnapshot.forEach(doc => {
+        const reservaId = doc.id;
+        if (!reservasVistas.has(reservaId)) {
+          const reservaData = doc.data() as Omit<Reserva, 'id'>;
+          console.log('Reserva ID:', reservaId, 'Fecha:', reservaData.fecha, 'Estado:', reservaData.estado);
+          reservasList.push({ id: reservaId, ...reservaData });
+          reservasVistas.add(reservaId);
+        }
+      });
+      
+      console.log('Total de reservas únicas cargadas:', reservasList.length);
+      setReservas(reservasList);
+    } catch (error) {
+      console.error("Error trayendo reservas:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  // Efecto para cargar las reservas
+  useEffect(() => {
+    cargarReservas();
+    
+    // Suscribirse a cambios en la autenticación
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        cargarReservas();
+      } else {
+        setReservas([]);
+      }
+    });
+    
+    // Limpiar suscripción al desmontar
+    return () => {
+      unsubscribe();
+    };
+  }, [cargarReservas]);
+
   // Filtrar y ordenar reservas
-  const reservasFiltradas = React.useMemo(() => {
+  const reservasFiltradas = useMemo(() => {
     const filtered = filtro === 'todas' 
       ? [...reservas] 
       : reservas.filter(reserva => reserva.estado === filtro);
-    
-    return filtered.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    return filtered.sort((a, b) => {
+      const dateA = a.fechaTimestamp?.toDate ? a.fechaTimestamp.toDate() : new Date(a.fecha);
+      const dateB = b.fechaTimestamp?.toDate ? b.fechaTimestamp.toDate() : new Date(b.fecha);
+      return dateB.getTime() - dateA.getTime();
+    });
   }, [reservas, filtro]);
 
   // Verificar si la reserva puede ser cancelada (más de 48 horas de anticipación)
-  const puedeCancelar = useCallback((fechaReserva: string) => {
+  const puedeCancelar = useCallback((fechaISO: string) => {
     try {
-      const fechaReservaObj = parseISO(fechaReserva);
+      // Crear fechas en la zona horaria local
+      const fechaReserva = new Date(fechaISO);
       const ahora = new Date();
-      const diferenciaHoras = differenceInHours(fechaReservaObj, ahora);
+      
+      // Ajustar por la diferencia de zona horaria
+      const offset = fechaReserva.getTimezoneOffset() * 60 * 1000;
+      const fechaReservaLocal = new Date(fechaReserva.getTime() - offset);
+      const ahoraLocal = new Date(ahora.getTime() - (ahora.getTimezoneOffset() * 60 * 1000));
+      
+      // Calcular diferencia en horas
+      const diferenciaMs = fechaReservaLocal.getTime() - ahoraLocal.getTime();
+      const diferenciaHoras = Math.floor(diferenciaMs / (1000 * 60 * 60));
+      
+      console.log('Verificando cancelación - Fecha reserva:', fechaReservaLocal.toISOString(), 
+                 'Ahora:', ahoraLocal.toISOString(), 
+                 'Diferencia horas:', diferenciaHoras);
+      
       return diferenciaHoras > 48;
     } catch (e) {
-      console.error('Error al verificar fecha de cancelación:', e);
+      console.error('Error al verificar fecha de cancelación:', e, 'Fecha recibida:', fechaISO);
       return false;
     }
   }, []);
 
   // Verificar si la reserva puede ser modificada (más de 24 horas de anticipación)
-  const puedeModificar = useCallback((fechaReserva: string) => {
+  const puedeModificar = useCallback((fechaISO: string) => {
     try {
-      const fechaReservaObj = parseISO(fechaReserva);
+      // Crear fechas en la zona horaria local
+      const fechaReserva = new Date(fechaISO);
       const ahora = new Date();
-      const diferenciaHoras = differenceInHours(fechaReservaObj, ahora);
+      
+      // Ajustar por la diferencia de zona horaria
+      const offset = fechaReserva.getTimezoneOffset() * 60 * 1000;
+      const fechaReservaLocal = new Date(fechaReserva.getTime() - offset);
+      const ahoraLocal = new Date(ahora.getTime() - (ahora.getTimezoneOffset() * 60 * 1000));
+      
+      // Calcular diferencia en horas
+      const diferenciaMs = fechaReservaLocal.getTime() - ahoraLocal.getTime();
+      const diferenciaHoras = Math.floor(diferenciaMs / (1000 * 60 * 60));
+      
+      console.log('Verificando modificación - Fecha reserva:', fechaReservaLocal.toISOString(), 
+                 'Ahora:', ahoraLocal.toISOString(), 
+                 'Diferencia horas:', diferenciaHoras);
+      
       return diferenciaHoras > 24;
     } catch (e) {
-      console.error('Error al verificar fecha de modificación:', e);
+      console.error('Error al verificar fecha de modificación:', e, 'Fecha recibida:', fechaISO);
       return false;
     }
   }, []);
 
-  // Formatear fecha para mostrar
-  const formatearFecha = useCallback((fecha: string) => {
+  // Formatear fecha para mostrar (solo fecha, sin hora)
+  const formatearFecha = useCallback((fechaISO: string) => {
     try {
-      return format(parseISO(fecha), "EEEE d 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es });
+      // Crear un objeto Date a partir de la cadena ISO (YYYY-MM-DD)
+      const [year, month, day] = fechaISO.split('-').map(Number);
+      const fecha = new Date(year, month - 1, day);
+      
+      // Usar toLocaleDateString con la configuración de Argentina
+      return fecha.toLocaleDateString('es-AR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    
+        timeZone: 'America/Argentina/Buenos_Aires'
+      });
     } catch (e) {
-      console.error('Error al formatear fecha:', e);
-      return fecha;
+      console.error('Error al formatear fecha:', e, 'Fecha recibida:', fechaISO);
+      return fechaISO;
     }
   }, []);
+
+
+
+  // Manejar calificación del club
+  const handleRateClub = useCallback(async (rating: number, comment: string): Promise<void> => {
+    if (!selectedClub) return;
+    
+    try {
+      // Guardar la calificación en la colección de ratings
+      await addDoc(collection(db, 'clubRatings'), {
+        clubId: selectedClub.id,
+        userId: auth.currentUser?.uid,
+        rating,
+        comment: comment || null,
+        createdAt: serverTimestamp(),
+        userName: auth.currentUser?.displayName || 'Usuario anónimo',
+        clubName: selectedClub.name
+      });
+
+      // Actualizar el promedio de calificaciones del club
+      const ratingsQuery = query(
+        collection(db, 'clubRatings'),
+        where('clubId', '==', selectedClub.id)
+      );
+      
+      const snapshot = await getDocs(ratingsQuery);
+      let total = 0;
+      let count = 0;
+      
+      snapshot.forEach(doc => {
+        total += doc.data().rating;
+        count++;
+      });
+      
+      const average = count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+      
+      // Actualizar el documento del club con el nuevo promedio
+      const clubRef = doc(db, 'clubs', selectedClub.id);
+      await updateDoc(clubRef, {
+        averageRating: average,
+        ratingCount: count,
+        lastRatedAt: serverTimestamp()
+      });
+      
+      toast.success('¡Gracias por tu calificación!');
+    } catch (error) {
+      console.error('Error al guardar la calificación:', error);
+      toast.error('Error al guardar la calificación');
+      throw error; // Re-throw to let the modal handle the error
+    }
+  }, [selectedClub]);
 
   // Manejar cancelación de reserva
   const handleCancelarReserva = useCallback(async () => {
@@ -360,18 +486,22 @@ const FisherBookings: React.FC = () => {
                 bg-white
               `}
             >
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-1">
-                <span className="font-semibold text-lg">{reserva.clubName}</span>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start mb-3 gap-2">
+                <div>
+                  <h3 className="font-semibold text-lg">{reserva.clubName}</h3>
+                  <div className="text-blue-700 font-medium">
+                    {formatearFecha(reserva.fecha)}
+                  </div>
+                </div>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                   getEstadoColor(reserva.estado)
                 }`}>
-                  {reserva.estado.charAt(0).toUpperCase() + reserva.estado.slice(1)}
+                  {reserva.estado === 'pendiente' ? 'Pendiente de confirmación' : 
+                   reserva.estado === 'confirmada' ? 'Confirmada' :
+                   reserva.estado.charAt(0).toUpperCase() + reserva.estado.slice(1)}
                 </span>
               </div>
               <div className="flex flex-wrap gap-x-8 gap-y-2 text-gray-700">
-                <div className="w-full">
-                  <span className="font-semibold">Fecha:</span> {formatearFecha(reserva.fecha)}
-                </div>
                 <div>
                   <span className="font-semibold">Bote:</span> {reserva.bote} ({reserva.capacidad} personas)
                 </div>
@@ -381,13 +511,31 @@ const FisherBookings: React.FC = () => {
                 <div>
                   <span className="font-semibold">Mojarras:</span> {reserva.mojarras} unidades
                 </div>
-                {reserva.estado === 'cancelada' && (
-                  <div className="w-full mt-2">
-                    <span className="text-red-600 text-sm">
-                      ⚠️ Esta reserva ha sido cancelada
-                    </span>
-                  </div>
-                )}
+                <div className="text-sm text-gray-600">
+                  <p>Estado: <span className="font-medium">
+                    {reserva.estado === 'pendiente' && 'Pendiente de confirmación'}
+                    {reserva.estado === 'confirmada' && 'Confirmada'}
+                    {reserva.estado === 'completada' && 'Completada'}
+                    {reserva.estado === 'cancelada' && 'Cancelada'}
+                  </span></p>
+                  
+                  {reserva.estado === 'cancelada' && (
+                    <div className="w-full mt-2 bg-red-50 p-2 rounded-md">
+                      <p className="text-red-700 font-medium">
+                        {reserva.canceladoPor === 'club' 
+                          ? '⚠️ Reserva cancelada por el club'
+                          : '⚠️ Has cancelado esta reserva'}
+                      </p>
+                      {reserva.mensaje && (
+                        <p className="text-red-600 text-sm mt-1">
+                          <span className="font-medium"></span> {reserva.mensaje}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+
+                </div>
                 {reserva.estado !== 'cancelada' && (
                   <div className="w-full flex flex-wrap gap-2 mt-3">
                     <button
@@ -400,34 +548,34 @@ const FisherBookings: React.FC = () => {
                         });
                         setShowModifyDialog(true);
                       }}
-                      disabled={!puedeModificar(reserva.fecha) || reserva.estado !== 'confirmada'}
+                      disabled={!puedeModificar(reserva.fecha) || reserva.estado !== 'pendiente'}
                       className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                        puedeModificar(reserva.fecha) && reserva.estado === 'confirmada'
+                        puedeModificar(reserva.fecha) && reserva.estado === 'pendiente'
                           ? 'bg-blue-600 text-white hover:bg-blue-700'
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}
-                      title={reserva.estado !== 'confirmada' 
-                        ? 'No se pueden modificar reservas que no estén confirmadas'
+                      title={reserva.estado !== 'pendiente' 
+                        ? 'Solo se pueden modificar reservas pendientes'
                         : puedeModificar(reserva.fecha) 
                           ? '' 
                           : 'Solo se pueden modificar reservas con más de 24 horas de anticipación'}
                     >
-                      {reserva.estado === 'pendiente' ? 'Pendiente' : 'Modificar'}
+                      Modificar
                     </button>
                     <button
                       onClick={() => {
                         setSelectedReserva(reserva);
                         setShowCancelDialog(true);
                       }}
-                      disabled={reserva.estado !== 'confirmada' || !puedeCancelar(reserva.fecha)}
+                      disabled={!['pendiente', 'confirmada'].includes(reserva.estado) || !puedeCancelar(reserva.fecha)}
                       className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                        reserva.estado === 'confirmada' && puedeCancelar(reserva.fecha)
+                        ['pendiente', 'confirmada'].includes(reserva.estado) && puedeCancelar(reserva.fecha)
                           ? 'bg-red-600 text-white hover:bg-red-700'
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}
                       title={getCancelButtonTitle(reserva.estado, reserva.fecha)}
                     >
-                      {getCancelButtonText(reserva.estado)}
+                      Cancelar
                     </button>
                     {(!puedeModificar(reserva.fecha) || !puedeCancelar(reserva.fecha)) && (
                       <div className="w-full text-yellow-600 text-xs mt-1">
@@ -439,12 +587,14 @@ const FisherBookings: React.FC = () => {
                   </div>
                 )}
               </div>
-              <ClimaCard ciudad={reserva.clubName || "villa carlos paz, Córdoba, AR"} fecha={reserva.fecha} />
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-4 flex flex-wrap gap-4 items-center justify-between">
+               
+                <div className="flex items-center gap-2">
                 <span className="font-bold text-green-800 text-lg">Total:</span>
-                <span className="text-lg font-semibold">
-                  ${calcularTotal(reserva).toLocaleString("es-AR")}
-                </span>
+                  <span className="text-lg font-semibold">
+                    ${calcularTotal(reserva).toLocaleString("es-AR")}
+                  </span>
+                </div>
               </div>
               {reserva.mensaje && (
                 <div className="bg-gray-100 border rounded p-2 mt-2 text-sm text-gray-700">
@@ -610,6 +760,17 @@ const FisherBookings: React.FC = () => {
         </div>
       </Dialog>
     </Transition>
+
+    {/* Modal de calificación */}
+    {selectedClub && (
+      <ClubRatingModal
+        isOpen={showRatingModal}
+        onClose={() => setShowRatingModal(false)}
+        onRate={handleRateClub}
+        clubName={selectedClub.name}
+        clubId={selectedClub.id}
+      />
+    )}
     </>
   );
 };

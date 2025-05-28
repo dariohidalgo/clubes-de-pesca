@@ -111,7 +111,32 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNotificationC
               <div>
                 <div className="font-semibold">{notif.title}</div>
                 <div className="text-gray-500 text-sm">{notif.message}</div>
-                <div className="text-xs text-gray-400">{notif.createdAt?.toDate?.().toLocaleString() || ''}</div>
+                <div className="text-xs text-gray-400">
+                  {notif.createdAt?.toDate ? (() => {
+                    // Obtener la fecha de Firestore
+                    const fechaFirestore = notif.createdAt.toDate();
+                    
+                    // Crear una nueva fecha con los componentes locales
+                    const fechaLocal = new Date(
+                      Date.UTC(
+                        fechaFirestore.getFullYear(),
+                        fechaFirestore.getMonth(),
+                        fechaFirestore.getDate(),
+                        fechaFirestore.getHours(),
+                        fechaFirestore.getMinutes()
+                      )
+                    );
+                    
+                    // Obtener componentes de la fecha local
+                    const dia = String(fechaLocal.getDate()).padStart(2, '0');
+                    const mes = String(fechaLocal.getMonth() + 1).padStart(2, '0');
+                    const anio = fechaLocal.getFullYear();
+                    const horas = String(fechaLocal.getHours()).padStart(2, '0');
+                    const minutos = String(fechaLocal.getMinutes()).padStart(2, '0');
+                    
+                    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
+                  })() : ''}
+                </div>
                 <div className="text-xs text-gray-400">{notif.total ? `$${notif.total}` : ''}</div>
               </div>
               {!notif.read && <span className="ml-auto text-xs bg-blue-600 text-white rounded-full px-2 py-0.5">Nuevo</span>}

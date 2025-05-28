@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, addDoc, collection, updateDoc } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, updateDoc, setDoc, query, where, getDocs } from "firebase/firestore";
 import { db, auth } from "../../../firebaseConfig";
 import { useAuthState } from "react-firebase-hooks/auth";
+import StarRating from "../../components/common/StarRating";
 
 interface Bote {
   tipo: string;
@@ -38,7 +39,69 @@ const ReservarClub: React.FC = () => {
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [stock, setStock] = useState<{[key: string]: number}>({});
+  const [showRating, setShowRating] = useState(false);
+ 
+  const [hasRated, setHasRated] = useState(false);
   const navigate = useNavigate();
+
+  // Verificar si el usuario ya calificó este club
+  
+    
+
+  const handleRatingSubmit = async (rating: number) => {
+    if (!user?.uid || !clubId) return;
+    
+    try {
+      const ratingRef = doc(db, 'ratings', `${user.uid}_${clubId}`);
+      await setDoc(ratingRef, {
+        userId: user.uid,
+        clubId,
+        rating,
+        createdAt: new Date()
+      });
+      
+      // Actualizar el promedio en el club
+      await updateClubAverageRating();
+      
+  
+      setHasRated(true);
+      setShowRating(false);
+      
+    } catch (error) {
+      console.error('Error al guardar calificación:', error);
+      setError('No se pudo guardar la calificación. Por favor, intentá nuevamente.');
+    }
+  };
+
+  const updateClubAverageRating = async () => {
+    if (!clubId) return;
+    
+    try {
+      const ratingsRef = collection(db, 'ratings');
+      const q = query(ratingsRef, where('clubId', '==', clubId));
+      const querySnapshot = await getDocs(q);
+      
+      let total = 0;
+      let count = 0;
+      
+      querySnapshot.forEach((doc: any) => {
+        total += doc.data().rating;
+        count++;
+      });
+      
+      const average = count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+      
+      // Actualizar el promedio en el documento del club
+      const clubRef = doc(db, 'clubs', clubId);
+      await updateDoc(clubRef, {
+        averageRating: average,
+        ratingCount: count
+      });
+      
+    } catch (error) {
+      console.error('Error al actualizar calificación promedio:', error);
+    }
+  };
 
   // Traer datos del club y precios
   useEffect(() => {
@@ -85,10 +148,14 @@ const ReservarClub: React.FC = () => {
   // Calcular total
   const total = precioBote + precioMojarra * mojarras;
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleReservar = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setMensaje("");
+    if (isSubmitting) return; // Si ya está enviando, no hace nada
+    setIsSubmitting(true);
 
     if (!bote) return setError("Seleccioná un tipo de bote");
     if (!fecha) return setError("Seleccioná una fecha");
@@ -154,20 +221,48 @@ const ReservarClub: React.FC = () => {
 
       // Crear notificación para el administrador del club
       if (clubId) {
+        // Crear fecha actual con la zona horaria correcta
+        const ahora = new Date();
+        const offset = ahora.getTimezoneOffset() * 60000; // offset en milisegundos
+        const fechaNotificacion = new Date(ahora.getTime() - offset);
+        
+        // Crear fecha de reserva con la zona horaria correcta
+        const fechaReserva = new Date(fecha);
+        const fechaReservaAjustada = new Date(fechaReserva.getTime() - (fechaReserva.getTimezoneOffset() * 60000));
+        
+        // Formatear la fecha de reserva manualmente para evitar problemas de zona horaria
+        const dia = String(fechaReservaAjustada.getDate()).padStart(2, '0');
+        const mes = String(fechaReservaAjustada.getMonth() + 1).padStart(2, '0');
+        const anio = fechaReservaAjustada.getFullYear();
+        const fechaReservaFormateada = `${dia}/${mes}/${anio}`;
+        
+        console.log('Fecha de reserva original:', fecha);
+        console.log('Fecha de reserva ajustada:', fechaReservaAjustada);
+        console.log('Fecha de reserva formateada:', fechaReservaFormateada);
+
         await addDoc(collection(db, "notifications"), {
           clubId,
           title: "Nueva reserva recibida",
-          message: `${nombre} ha realizado una reserva para ${new Date(fecha).toLocaleDateString('es-AR')}`,
+          message: `${nombre} ha realizado una reserva para el ${fechaReservaFormateada}`,
           type: "reserva",
           read: false,
           reservaId: reservaRef.id,
           total,
-          createdAt: new Date(),
+          createdAt: fechaNotificacion,
         });
       }
 
       setMensaje("¡Reserva enviada con éxito! Te avisaremos cuando el club la confirme.");
-      setTimeout(() => navigate("/fisher/reservas"), 1800);
+      setShowRating(true);
+      
+      // Navegar después de 5 segundos si no califica
+      const timer = setTimeout(() => {
+        if (!hasRated) {
+          navigate("/fisher/reservas");
+        }
+      }, 10000);
+      
+      return () => clearTimeout(timer);
     } catch (err: any) {
       console.error("Error al crear la reserva:", err);
       setError("No se pudo registrar la reserva. Por favor, intentá nuevamente.");
@@ -412,14 +507,46 @@ const ReservarClub: React.FC = () => {
               Bote: ${precioBote.toLocaleString("es-AR")} + Mojarras: ${precioMojarra.toLocaleString("es-AR")} x {mojarras}
             </div>
           </div>
-          {error && <div className="text-red-600 text-center">{error}</div>}
-          {mensaje && <div className="text-green-700 text-center">{mensaje}</div>}
-          <button
-            type="submit"
-            className="w-full bg-green-700 text-white font-semibold py-2 rounded-md hover:bg-green-800 mt-2"
-          >
-            Reservar
-          </button>
+          {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">{error}</div>}
+          {mensaje && (
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+              {mensaje}
+              {/* {showRating && !hasRated && (
+                <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">¿Cómo calificarías tu experiencia con {club?.name}?</h3>
+                  <div className="flex justify-center my-4">
+                    <StarRating 
+                      clubId={clubId || ''} 
+                      onRatingChange={handleRatingSubmit}
+                      size="lg"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500 text-center">
+                    Tu opinión ayuda a otros pescadores a elegir el mejor club.
+                  </p>
+                </div>
+              )} */}
+          
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                
+                  <button 
+                    onClick={() => navigate("/fisher/reservas")}
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    Ver mis reservas →
+                  </button>
+                </div>
+          
+            </div>
+          )}
+         <button
+  type="submit"
+  className="w-full bg-green-700 text-white font-semibold py-2 rounded-md hover:bg-green-800 mt-2 disabled:opacity-60"
+  disabled={isSubmitting}
+>
+  {isSubmitting ? "Procesando..." : "Reservar"}
+</button>
+
         </form>
       </div>
     </div>

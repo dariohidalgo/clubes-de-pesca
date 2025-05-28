@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 import SidebarPescador from '../components/SidebarPescador';
 
 const FisherLayout: React.FC = () => (
-  <div className="flex min-h-screen w-100dvh bg-gray-50">
+  <div className="flex max-h-screen w-100dvh bg-gray-50">
     {/* Sidebar */}
     <SidebarPescador />
     

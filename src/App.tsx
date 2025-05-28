@@ -14,6 +14,7 @@ import BoatsAndBaitPanel from './club/pages/BoatsAndBaitPanel';
 import BaitChips from './club/components/BaitChips';
 import BookingCalendar from './club/components/BookingCalendar';
 import NotificationsPanel from './club/components/NotificationsPanel';
+import ClubRatingsPanel from './club/components/ClubRatingsPanel';
 
 // Fisher Imports
 import LoginFisher from './fishers/pages/LoginFisher';
@@ -23,6 +24,7 @@ import FisherBookings from './fishers/pages/FisherBookings';
 import FisherLayout from './fishers/pages/FisherLayout';
 import ReservarClub from './fishers/pages/ReservarClub';
 import FishingZones from './fishers/pages/FishingZones';
+import ClubRankings from './fishers/pages/ClubRankings';
 
 import './App.css';
 
@@ -56,6 +58,7 @@ const App: React.FC = () => {
           <Route path="inicio" element={<ClubInfoCard />} />
           <Route path="botes" element={<BoatsAndBaitPanel />} />
           <Route path="carnadas" element={<BaitChips />} />
+          <Route path="calificaciones" element={<ClubRatingsPanel />} />
           <Route path="reservas">
             <Route index element={<BookingCalendar />} />
             <Route path=":reservaId" element={<BookingCalendar />} />
@@ -77,6 +80,7 @@ const App: React.FC = () => {
           <Route path="reservas" element={<FisherBookings />} />
           <Route path="reservar/:clubId" element={<ReservarClub />} />
           <Route path="zonas-pesca" element={<FishingZones />} />
+          <Route path="ranking-clubes" element={<ClubRankings />} />
         </Route>
         
         {/* Catch-all */}
