@@ -3,6 +3,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { CalendarDays, Bell, Fish, Ship, ClipboardList, Menu, X, Star } from 'lucide-react';
 import LogoutButton from "../../auth/LogoutButton";
 import { useState, useEffect } from 'react';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth, db } from '../../../firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
 
 const navLinks = [
   { to: '/club/inicio', label: 'Inicio', icon: <ClipboardList className="w-5 h-5" /> },
@@ -14,6 +17,21 @@ const navLinks = [
 ];
 
 const Sidebar: React.FC = () => {
+  const [user] = useAuthState(auth);
+  const [clubName, setClubName] = useState('');
+  
+  useEffect(() => {
+    const fetchClubName = async () => {
+      if (user) {
+        const clubDoc = await getDoc(doc(db, 'clubs', user.uid));
+        if (clubDoc.exists()) {
+          setClubName(clubDoc.data().name || '');
+        }
+      }
+    };
+    
+    fetchClubName();
+  }, [user]);
   const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -73,8 +91,15 @@ const Sidebar: React.FC = () => {
       >
         <div className="p-6 flex-1 overflow-y-auto">
           <div className="text-lg font-bold mb-10 mt-10">
-            Club de Pesca<br />
-            <span className="text-sm font-normal  text-gray-500">Administrador</span>
+            {clubName ? (
+              <>
+                ¡Bienvenido!<br />
+                <span className="text-blue-600">{clubName}</span>
+              </>
+            ) : (
+              'Cargando...'
+            )}
+            <div className="text-sm font-normal text-gray-500 mt-2">Panel de administración</div>
           </div>
           <nav className="flex flex-col gap-2">
     

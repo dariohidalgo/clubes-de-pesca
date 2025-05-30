@@ -172,7 +172,7 @@ const ClubInfoCard: React.FC = () => {
             <img
               src={form.logoUrl || '/placeholder.jpg'}
               alt="Logo club"
-              className="w-full h-full object-cover rounded-full border-2 border-blue-100"
+              className="w-full h-full  rounded-full border-none"
             />
           )}
         </div>
