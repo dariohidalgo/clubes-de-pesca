@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, addDoc, collection, updateDoc, setDoc, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db, auth } from "../../../firebaseConfig";
 import { useAuthState } from "react-firebase-hooks/auth";
-import StarRating from "../../components/common/StarRating";
+
 
 interface Bote {
   tipo: string;
@@ -39,98 +39,101 @@ const ReservarClub: React.FC = () => {
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [stock, setStock] = useState<{[key: string]: number}>({});
-  const [showRating, setShowRating] = useState(false);
- 
-  const [hasRated, setHasRated] = useState(false);
+
   const navigate = useNavigate();
 
   // Verificar si el usuario ya calificó este club
   
     
 
-  const handleRatingSubmit = async (rating: number) => {
-    if (!user?.uid || !clubId) return;
-    
-    try {
-      const ratingRef = doc(db, 'ratings', `${user.uid}_${clubId}`);
-      await setDoc(ratingRef, {
-        userId: user.uid,
-        clubId,
-        rating,
-        createdAt: new Date()
-      });
-      
-      // Actualizar el promedio en el club
-      await updateClubAverageRating();
-      
+ 
   
-      setHasRated(true);
-      setShowRating(false);
-      
-    } catch (error) {
-      console.error('Error al guardar calificación:', error);
-      setError('No se pudo guardar la calificación. Por favor, intentá nuevamente.');
-    }
-  };
 
-  const updateClubAverageRating = async () => {
-    if (!clubId) return;
-    
+  // Función para cargar la disponibilidad de botes para una fecha específica
+  const cargarDisponibilidadBotes = async (fechaSeleccionada: string, clubData: Club) => {
     try {
-      const ratingsRef = collection(db, 'ratings');
-      const q = query(ratingsRef, where('clubId', '==', clubId));
+      // Obtener todas las reservas confirmadas para la fecha seleccionada
+      const reservasRef = collection(db, 'reservas');
+      const q = query(
+        reservasRef,
+        where('clubId', '==', clubId),
+        where('fecha', '==', fechaSeleccionada),
+        where('estado', 'in', ['pendiente', 'confirmada'])
+      );
+      
       const querySnapshot = await getDocs(q);
       
-      let total = 0;
-      let count = 0;
+      // Inicializar contador de botes reservados
+      const botesReservados: {[key: string]: number} = {};
       
+      // Contar cuántos botes de cada tipo están reservados
       querySnapshot.forEach((doc: any) => {
-        total += doc.data().rating;
-        count++;
+        const reserva = doc.data();
+        const key = `${reserva.bote}-${reserva.capacidad}`;
+        botesReservados[key] = (botesReservados[key] || 0) + 1;
       });
       
-      const average = count > 0 ? Math.round((total / count) * 10) / 10 : 0;
-      
-      // Actualizar el promedio en el documento del club
-      const clubRef = doc(db, 'clubs', clubId);
-      await updateDoc(clubRef, {
-        averageRating: average,
-        ratingCount: count
+      // Calcular stock disponible para cada bote
+      const stockDisponible: {[key: string]: number} = {};
+      clubData.boats.forEach(boat => {
+        const key = `${boat.tipo}-${boat.capacidad}`;
+        const reservados = botesReservados[key] || 0;
+        stockDisponible[key] = Math.max(0, boat.cantidad - reservados);
       });
       
+      return stockDisponible;
     } catch (error) {
-      console.error('Error al actualizar calificación promedio:', error);
+      console.error('Error al cargar disponibilidad de botes:', error);
+      // En caso de error, retornar el stock completo como disponible
+      const stockCompleto: {[key: string]: number} = {};
+      clubData.boats.forEach(boat => {
+        stockCompleto[`${boat.tipo}-${boat.capacidad}`] = boat.cantidad;
+      });
+      return stockCompleto;
     }
   };
 
-  // Traer datos del club y precios
+  // Traer datos del club, precios y disponibilidad
   useEffect(() => {
-    const fetchClub = async () => {
+    const fetchClubYDisponibilidad = async () => {
       setLoading(true);
       if (clubId) {
-        const docRef = doc(db, "clubs", clubId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = { id: docSnap.id, ...docSnap.data() } as Club;
-          setClub(data);
+        try {
+          // Obtener datos del club
+          const docRef = doc(db, "clubs", clubId);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            const data = { id: docSnap.id, ...docSnap.data() } as Club;
+            setClub(data);
+            
+            // Si hay una fecha seleccionada, cargar disponibilidad
+            if (fecha) {
+              const stockDisponible = await cargarDisponibilidadBotes(fecha, data);
+              setStock(stockDisponible);
+            } else {
+              // Si no hay fecha, mostrar todo el stock como disponible
+              const stockInicial: {[key: string]: number} = {};
+              data.boats.forEach(boat => {
+                stockInicial[`${boat.tipo}-${boat.capacidad}`] = boat.cantidad;
+              });
+              setStock(stockInicial);
+            }
 
-          // Inicializar stock
-          const stockInicial: {[key: string]: number} = {};
-          data.boats.forEach(boat => {
-            stockInicial[`${boat.tipo}-${boat.capacidad}`] = boat.cantidad;
-          });
-          setStock(stockInicial);
-
-          // Set precio mojarra si hay info
-          if (data.mojarras && typeof data.mojarras.precio === "number") {
-            setPrecioMojarra(data.mojarras.precio);
+            // Set precio mojarra si hay info
+            if (data.mojarras && typeof data.mojarras.precio === "number") {
+              setPrecioMojarra(data.mojarras.precio);
+            }
           }
+        } catch (error) {
+          console.error('Error al cargar datos del club:', error);
         }
       }
       setLoading(false);
     };
-    fetchClub();
-  }, [clubId]);
+    
+    fetchClubYDisponibilidad();
+  }, [clubId, fecha]); // Se ejecuta cuando cambia el club o la fecha
 
   // Al cambiar el tipo de bote, buscar precio/capacidad
   useEffect(() => {
@@ -153,7 +156,7 @@ const ReservarClub: React.FC = () => {
   const handleReservar = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setMensaje("");
+    setMensaje("Procesando tu reserva...");
     if (isSubmitting) return; // Si ya está enviando, no hace nada
     setIsSubmitting(true);
 
@@ -167,104 +170,79 @@ const ReservarClub: React.FC = () => {
       return setError("No hay disponibilidad para este tipo de bote");
     }
 
-    try {
-      // Recuperar perfil del pescador de Firestore
-      let nombre = "";
-      let celular = "";
-      if (user?.uid) {
-        const perfilRef = doc(db, "users", user.uid);
-        const perfilSnap = await getDoc(perfilRef);
-        if (perfilSnap.exists()) {
-          const data = perfilSnap.data();
-          nombre = data.nombre || "";
-          celular = data.celular || "";
+    // Redirigir inmediatamente sin esperar la confirmación
+    navigate('/fisher/reservas');
+
+    // Continuar con el proceso en segundo plano
+    (async () => {
+      try {
+        // Recuperar perfil del pescador de Firestore
+        let nombre = "";
+        let celular = "";
+        if (user?.uid) {
+          const perfilRef = doc(db, "users", user.uid);
+          const perfilSnap = await getDoc(perfilRef);
+          if (perfilSnap.exists()) {
+            const data = perfilSnap.data();
+            nombre = data.nombre || "";
+            celular = data.celular || "";
+          }
         }
-      }
 
-      // Crear la reserva
-      const reservaRef = await addDoc(collection(db, "reservas"), {
-        clubId,
-        clubName: club?.name,
-        userId: user?.uid,
-        nombre,
-        email: user?.email || "",
-        celular,
-        bote,
-        personas,
-        mojarras,
-        precioBote,
-        precioMojarra,
-        total,
-        fecha,
-        estado: "pendiente",
-        mensaje: "",
-        createdAt: new Date(),
-      });
-
-      // Actualizar stock en Firestore
-      if (clubId && club) {
-        const clubRef = doc(db, "clubs", clubId);
-        await updateDoc(clubRef, {
-          boats: club.boats.map(boat => 
-            boat.tipo === bote && boat.capacidad === capacidad
-              ? { ...boat, cantidad: (boat.cantidad || 0) - 1 }
-              : boat
-          )
-        });
-
-        // Actualizar stock local
-        setStock(prev => ({
-          ...prev,
-          [boteKey]: (prev[boteKey] || 0) - 1
-        }));
-      }
-
-      // Crear notificación para el administrador del club
-      if (clubId) {
-        // Crear fecha actual con la zona horaria correcta
-        const ahora = new Date();
-        const offset = ahora.getTimezoneOffset() * 60000; // offset en milisegundos
-        const fechaNotificacion = new Date(ahora.getTime() - offset);
-        
-        // Crear fecha de reserva con la zona horaria correcta
-        const fechaReserva = new Date(fecha);
-        const fechaReservaAjustada = new Date(fechaReserva.getTime() - (fechaReserva.getTimezoneOffset() * 60000));
-        
-        // Formatear la fecha de reserva manualmente para evitar problemas de zona horaria
-        const dia = String(fechaReservaAjustada.getDate()).padStart(2, '0');
-        const mes = String(fechaReservaAjustada.getMonth() + 1).padStart(2, '0');
-        const anio = fechaReservaAjustada.getFullYear();
-        const fechaReservaFormateada = `${dia}/${mes}/${anio}`;
-        
-   
-
-        await addDoc(collection(db, "notifications"), {
+        // Crear la reserva
+        const reservaRef = await addDoc(collection(db, "reservas"), {
           clubId,
-          title: "Nueva reserva recibida",
-          message: `${nombre} ha realizado una reserva para el ${fechaReservaFormateada}`,
-          type: "reserva",
-          read: false,
-          reservaId: reservaRef.id,
+          clubName: club?.name,
+          userId: user?.uid,
+          nombre,
+          email: user?.email || "",
+          celular,
+          bote,
+          personas,
+          mojarras,
+          precioBote,
+          precioMojarra,
           total,
-          createdAt: fechaNotificacion,
+          fecha,
+          capacidad,
+          estado: "pendiente",
+          mensaje: "",
+          createdAt: new Date(),
         });
-      }
 
-      setMensaje("¡Reserva enviada con éxito! Te avisaremos cuando el club la confirme.");
-      setShowRating(true);
-      
-      // Navegar después de 5 segundos si no califica
-      const timer = setTimeout(() => {
-        if (!hasRated) {
-          navigate("/fisher/reservas");
+        // Crear notificación para el administrador del club
+        if (club?.id) {
+          await addDoc(collection(db, 'notifications'), {
+            userId: 'admin', // Para que lo vea el administrador
+            title: 'Nueva Reserva',
+            message: `Nueva reserva de ${nombre || 'un usuario'} para el ${fecha}`,
+            type: 'nueva_reserva',
+            read: false,
+            reservaId: reservaRef.id,
+            clubId: club.id,
+            createdAt: new Date(),
+          });
         }
-      }, 10000);
-      
-      return () => clearTimeout(timer);
-    } catch (err: any) {
-      console.error("Error al crear la reserva:", err);
-      setError("No se pudo registrar la reserva. Por favor, intentá nuevamente.");
-    }
+
+        // Actualizar stock localmente para reflejar la reserva
+        const nuevoStock = { ...stock };
+        nuevoStock[boteKey] = (nuevoStock[boteKey] || 0) - 1;
+        setStock(nuevoStock);
+        
+        // Limpiar formulario
+        setBote("");
+        setPersonas(1);
+        setMojarras(0);
+        setPrecioBote(0);
+        setPrecioMojarra(0);
+        
+      } catch (err) {
+        console.error("Error al procesar la reserva:", err);
+        // No mostramos el error al usuario ya que ya fue redirigido
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
   };
 
   // Clasificar botes por tipo

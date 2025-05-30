@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import StarRating from "../../components/common/StarRating";
+
 import ClubRatingModal from "./ClubRatingModal";
 import { auth } from "../../../firebaseConfig";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -49,11 +49,7 @@ const ClubCard: React.FC<ClubCardProps> = ({
     setShowRatingModal(true);
   };
 
-  const handleRatingChange = (clubId: string, rating: number) => {
-    if (onRatingChange) {
-      onRatingChange(clubId, rating);
-    }
-  };
+
 
   const handleRatingSubmit = async (rating: number, comment: string): Promise<void> => {
     try {

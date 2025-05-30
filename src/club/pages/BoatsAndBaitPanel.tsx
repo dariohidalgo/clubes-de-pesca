@@ -16,8 +16,8 @@ interface MojarrasStock {
 }
 
 const BOAT_TYPES: BoatStock[] = [
-  { tipo: "Botes con motor", capacidad: 3, cantidad: 0, precio: 0 },
-  { tipo: "Botes sin motor", capacidad: 3, cantidad: 0, precio: 0 },
+  { tipo: "Bote con motor", capacidad: 3, cantidad: 0, precio: 0 },
+  { tipo: "Bote sin motor", capacidad: 3, cantidad: 0, precio: 0 },
   { tipo: "Tracker", capacidad: 4, cantidad: 0, precio: 0 },
   { tipo: "Tracker", capacidad: 5, cantidad: 0, precio: 0 },
 ];

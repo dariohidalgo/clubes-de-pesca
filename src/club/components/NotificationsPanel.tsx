@@ -13,6 +13,7 @@ interface Notification {
   read: boolean;
   reservaId?: string;
   total?: number;
+  reservaDate?: string; // Fecha de la reserva en formato ISO o similar
 }
 
 interface NotificationsPanelProps {
@@ -110,29 +111,32 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNotificationC
               {iconForType(notif.type)}
               <div>
                 <div className="font-semibold">{notif.title}</div>
-                <div className="text-gray-500 text-sm">{notif.message}</div>
+                <div className="text-gray-500 text-sm">
+                  {/* Mostrar el mensaje sin la fecha */}
+                  {notif.message.split(' para ')[0]}
+                  {notif.reservaDate && (() => {
+                    // Extraer año, mes y día del string de fecha (YYYY-MM-DD)
+                    const [anio, mes, dia] = notif.reservaDate.split('-').map(Number);
+                    // Crear fecha manualmente para evitar problemas de zona horaria
+                    const fecha = new Date(anio, mes - 1, dia);
+                    // Formatear fecha en formato local (DD/MM/YYYY)
+                    const diaStr = String(fecha.getDate()).padStart(2, '0');
+                    const mesStr = String(fecha.getMonth() + 1).padStart(2, '0');
+                    const anioStr = fecha.getFullYear();
+                    return <span> para {`${diaStr}/${mesStr}/${anioStr}`}</span>;
+                  })()}
+                </div>
                 <div className="text-xs text-gray-400">
                   {notif.createdAt?.toDate ? (() => {
-                    // Obtener la fecha de Firestore
-                    const fechaFirestore = notif.createdAt.toDate();
+                    // Obtener la fecha de la notificación
+                    const fechaNotificacion = notif.createdAt.toDate();
                     
-                    // Crear una nueva fecha con los componentes locales
-                    const fechaLocal = new Date(
-                      Date.UTC(
-                        fechaFirestore.getFullYear(),
-                        fechaFirestore.getMonth(),
-                        fechaFirestore.getDate(),
-                        fechaFirestore.getHours(),
-                        fechaFirestore.getMinutes()
-                      )
-                    );
-                    
-                    // Obtener componentes de la fecha local
-                    const dia = String(fechaLocal.getDate()).padStart(2, '0');
-                    const mes = String(fechaLocal.getMonth() + 1).padStart(2, '0');
-                    const anio = fechaLocal.getFullYear();
-                    const horas = String(fechaLocal.getHours()).padStart(2, '0');
-                    const minutos = String(fechaLocal.getMinutes()).padStart(2, '0');
+                    // Formatear la fecha de notificación
+                    const dia = fechaNotificacion.getDate().toString().padStart(2, '0');
+                    const mes = (fechaNotificacion.getMonth() + 1).toString().padStart(2, '0');
+                    const anio = fechaNotificacion.getFullYear();
+                    const horas = fechaNotificacion.getHours().toString().padStart(2, '0');
+                    const minutos = fechaNotificacion.getMinutes().toString().padStart(2, '0');
                     
                     return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
                   })() : ''}

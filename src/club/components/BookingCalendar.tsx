@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import Calendar from "react-calendar";
-import "react-calendar/dist/Calendar.css";
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
+
+type ValuePiece = Date | null;
+type CalendarValue = ValuePiece | [ValuePiece, ValuePiece];
 import { collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc } from "firebase/firestore";
 import { db, auth } from "../../../firebaseConfig";
 import { X } from "lucide-react";
@@ -31,6 +34,66 @@ type FiltroEstado = 'todas' | 'pendiente' | 'confirmada' | 'eliminada';
 type VistaReservas = 'dia' | 'mes';
 
 const BookingCalendar: React.FC = () => {
+  // Función para crear una fecha UTC sin problemas de zona horaria
+  const crearFechaUTC = (fechaStr: string): Date => {
+    const [year, month, day] = fechaStr.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
+  };
+
+  // Función para formatear fechas sin problemas de zona horaria
+  const formatearFecha = (fechaISO: string) => {
+    try {
+      // Extraer año, mes y día del string de fecha (formato YYYY-MM-DD)
+      const [year, month, day] = fechaISO.split('-').map(Number);
+      
+      // Nombres de los días y meses en español
+      const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+      const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+      
+      // Crear fecha en UTC sin problemas de zona horaria
+      const fecha = crearFechaUTC(fechaISO);
+      const diaSemana = dias[fecha.getUTCDay()];
+      const nombreMes = meses[month - 1];
+      
+      // Formatear manualmente la fecha (ej: 'lunes 3 de junio de 2025')
+      return `${diaSemana} ${day} de ${nombreMes} de ${year}`;
+    } catch (e) {
+      console.error('Error al formatear fecha:', e, 'Fecha recibida:', fechaISO);
+      return fechaISO;
+    }
+  };
+
+  // Función para manejar el cambio de fecha en el calendario
+  const handleDateChange = (value: CalendarValue) => {
+    if (!value) return;
+    
+    // Si es un array de fechas, tomamos la primera
+    const date = Array.isArray(value) ? value[0] : value;
+    
+    if (!date) return;
+    
+    // Usar la fecha local del usuario pero ajustando a la medianoche
+    const localDate = new Date(date);
+    localDate.setHours(12, 0, 0, 0); // Establecer al mediodía para evitar problemas de zona horaria
+    
+    // Crear una nueva fecha en la zona horaria local
+    const adjustedDate = new Date(
+      localDate.getFullYear(),
+      localDate.getMonth(),
+      localDate.getDate()
+    );
+    
+    // Navegar a la vista de reservas para la fecha seleccionada
+    navigate(`/club/reservas`, { 
+      state: { 
+        selectedDate: adjustedDate.toISOString() 
+      } 
+    });
+    
+    setSelectedDate(adjustedDate);
+  };
+
   const { reservaId } = useParams<{ reservaId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,6 +107,20 @@ const BookingCalendar: React.FC = () => {
   const [modalAccion, setModalAccion] = useState<"confirmar" | "eliminar" | null>(null);
   const [mensaje, setMensaje] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Manejar la fecha seleccionada desde el estado de navegación
+  useEffect(() => {
+    if (location.state?.selectedDate) {
+      const dateFromState = new Date(location.state.selectedDate);
+      if (!isNaN(dateFromState.getTime())) {
+        // Ajustar la hora al mediodía para evitar problemas de zona horaria
+        dateFromState.setHours(12, 0, 0, 0);
+        setSelectedDate(dateFromState);
+      }
+      // Limpiar el estado para evitar que se vuelva a aplicar en re-renderizados
+      window.history.replaceState({ ...location.state, selectedDate: undefined }, document.title);
+    }
+  }, [location.state]);
 
   // Cargar reserva específica si hay un ID en la URL
   useEffect(() => {
@@ -60,7 +137,11 @@ const BookingCalendar: React.FC = () => {
           setReservaDetalle(reservaData);
           
           if (docSnap.data().fecha) {
-            setSelectedDate(new Date(docSnap.data().fecha));
+            // Crear fecha usando la fecha local para mantener consistencia
+            const [year, month, day] = docSnap.data().fecha.split('-').map(Number);
+            const localDate = new Date(year, month - 1, day);
+            localDate.setHours(12, 0, 0, 0); // Establecer al mediodía para evitar problemas de zona horaria
+            setSelectedDate(localDate);
           }
           
           // Verificar si venimos de una notificación o si debemos mostrar el modal
@@ -125,8 +206,8 @@ const BookingCalendar: React.FC = () => {
           // Debug: Mostrar la fecha como viene de la base de datos
        
           if (data.fecha) {
-            const fecha = new Date(data.fecha);
- 
+            // La fecha se maneja en otro lugar del código
+            new Date(data.fecha);
           }
           
           reservasList.push({ 
@@ -484,21 +565,69 @@ const BookingCalendar: React.FC = () => {
     }
   };
 
+  // Función para actualizar el stock de botes
+  const actualizarStockBote = async (clubId: string, boteTipo: string, cambio: number) => {
+    try {
+      // Obtener referencia al club
+      const clubRef = doc(db, "clubs", clubId);
+      const clubDoc = await getDoc(clubRef);
+      
+      if (!clubDoc.exists()) {
+        console.error("Club no encontrado");
+        return false;
+      }
+      
+      // Encontrar el bote específico
+      const clubData = clubDoc.data();
+      const botesActualizados = clubData.boats.map((bote: any) => {
+        if (bote.tipo === boteTipo) {
+          return {
+            ...bote,
+            cantidad: bote.cantidad + cambio
+          };
+        }
+        return bote;
+      });
+      
+      // Actualizar el documento del club
+      await updateDoc(clubRef, {
+        boats: botesActualizados
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("Error al actualizar el stock de botes:", error);
+      return false;
+    }
+  };
+
   // Manejador para las acciones del modal (confirmar/eliminar)
   const handleAction = async () => {
-    if (!modalReserva || !modalAccion) return;
+    if (!modalReserva || !modalAccion || !modalReserva.clubId) return;
     
     try {
       setLoading(true);
       
       // Crear mensaje predeterminado si no se ingresó ninguno
+      const formatearFecha = (fechaStr: string) => {
+        // Extraer año, mes y día del string de fecha (YYYY-MM-DD)
+        const [anio, mes, dia] = fechaStr.split('-').map(Number);
+        // Formatear como DD/MM/YYYY
+        return `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${anio}`;
+      };
+      
       const mensajeAMostrar = mensaje.trim() || 
         (modalAccion === 'confirmar' 
-          ? `Su reserva para el ${new Date(modalReserva.fecha).toLocaleDateString('es-AR')} ha sido confirmada.`
-          : `Lamentamos informarle que su reserva para el ${new Date(modalReserva.fecha).toLocaleDateString('es-AR')} ha sido cancelada.`);
+          ? `Su reserva para el ${formatearFecha(modalReserva.fecha)} ha sido confirmada.`
+          : `Lamentamos informarle que su reserva para el ${formatearFecha(modalReserva.fecha)} ha sido cancelada.`);
       
       // Actualizar el estado de la reserva
       if (modalAccion === 'confirmar') {
+        // Si la reserva estaba en estado pendiente, actualizar el stock
+        if (modalReserva.estado === 'pendiente') {
+          await actualizarStockBote(modalReserva.clubId, modalReserva.bote, -1);
+        }
+        
         await cambiarEstadoReserva(modalReserva, 'confirmada', mensajeAMostrar);
         
         // Crear notificación para el pescador
@@ -506,7 +635,7 @@ const BookingCalendar: React.FC = () => {
           await addDoc(collection(db, 'notifications'), {
             userId: modalReserva.userId,
             title: 'Reserva Confirmada',
-            message: `Tu reserva para el ${new Date(modalReserva.fecha).toLocaleDateString('es-AR')} ha sido confirmada`,
+            message: `Tu reserva para el ${formatearFecha(modalReserva.fecha)} ha sido confirmada`,
             type: 'reserva_confirmada',
             read: false,
             reservaId: modalReserva.id,
@@ -515,6 +644,11 @@ const BookingCalendar: React.FC = () => {
         }
         
       } else if (modalAccion === 'eliminar') {
+        // Si la reserva estaba confirmada, devolver el bote al stock
+        if (modalReserva.estado === 'confirmada') {
+          await actualizarStockBote(modalReserva.clubId, modalReserva.bote, 1);
+        }
+        
         await cambiarEstadoReserva(modalReserva, 'cancelada', mensajeAMostrar);
         
         // Crear notificación para el pescador
@@ -522,7 +656,7 @@ const BookingCalendar: React.FC = () => {
           await addDoc(collection(db, 'notifications'), {
             userId: modalReserva.userId,
             title: 'Reserva Cancelada',
-            message: `Tu reserva para el ${new Date(modalReserva.fecha).toLocaleDateString('es-AR')} ha sido cancelada`,
+            message: `Tu reserva para el ${formatearFecha(modalReserva.fecha)} ha sido cancelada`,
             type: 'reserva_cancelada',
             read: false,
             reservaId: modalReserva.id,
@@ -565,9 +699,14 @@ const BookingCalendar: React.FC = () => {
       <div className="bg-white rounded-xl shadow p-3 sm:p-4 flex justify-center mb-6">
         <Calendar
           value={selectedDate}
-          onChange={(date) => setSelectedDate(date as Date)}
+          onChange={handleDateChange}
           locale="es-AR"
           className="w-full max-w-xs sm:max-w-md"
+          formatDay={(_: unknown, date: Date) => date.getUTCDate().toString()}
+          next2Label={null}
+          prev2Label={null}
+          minDetail="month"
+          maxDetail="month"
         />
       </div>
 
@@ -620,35 +759,7 @@ const BookingCalendar: React.FC = () => {
             {/* Versión móvil: Tarjetas */}
             <div className="sm:hidden space-y-3">
               {reservasPaginadas.map((res) => {
-                // Extraer día, mes y año directamente del string
-                const [year, month, day] = res.fecha.split('-');
-                
-                // Crear un array con los nombres de los meses
-                const meses = [
-                  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-                  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-                ];
-                
-                // Crear un array con los días de la semana
-                const dias = [
-                  'domingo', 'lunes', 'martes', 'miércoles', 
-                  'jueves', 'viernes', 'sábado'
-                ];
-                
-                // Crear una fecha para obtener el día de la semana
-                const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                const diaSemana = dias[fecha.getDay()];
-                const nombreMes = meses[parseInt(month) - 1];
-                
-                // Formatear manualmente la fecha
-                const fechaFormateada = `${diaSemana} ${parseInt(day)} de ${nombreMes} de ${year} `;
-                
-           // Eliminar este bloque si no se necesita
-           // if (data.fecha) {
-           //   const fecha = new Date(data.fecha);
-           // }
-                
-                // No mostramos la hora ya que no es relevante para la fecha de reserva
+                const fechaFormateada = formatearFecha(res.fecha);
                 const horaFormateada = '';
                 
                 return (
@@ -955,13 +1066,7 @@ const BookingCalendar: React.FC = () => {
                   <p className="text-sm text-gray-600">{modalReserva.email}</p>
                   <p className="text-sm text-gray-600">Tel: {modalReserva.celular}</p>
                   <p className="mt-2 font-medium">
-                    {modalReserva.bote} - {new Date(modalReserva.fecha).toLocaleDateString('es-AR', { 
-                      weekday: 'long', 
-                      day: 'numeric', 
-                      month: 'long',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {modalReserva.bote} - {formatearFecha(modalReserva.fecha)}
                   </p>
                 </div>
                 

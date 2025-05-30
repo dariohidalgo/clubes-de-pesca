@@ -175,19 +175,21 @@ const FisherBookings: React.FC = () => {
   // Formatear fecha para mostrar (solo fecha, sin hora)
   const formatearFecha = useCallback((fechaISO: string) => {
     try {
-      // Crear un objeto Date a partir de la cadena ISO (YYYY-MM-DD)
+      // Extraer año, mes y día del string de fecha (formato YYYY-MM-DD)
       const [year, month, day] = fechaISO.split('-').map(Number);
-      const fecha = new Date(year, month - 1, day);
       
-      // Usar toLocaleDateString con la configuración de Argentina
-      return fecha.toLocaleDateString('es-AR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-    
-        timeZone: 'America/Argentina/Buenos_Aires'
-      });
+      // Nombres de los días y meses en español
+      const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+      const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+      
+      // Crear fecha sin ajustes de zona horaria
+      const fecha = new Date(Date.UTC(year, month - 1, day));
+      const diaSemana = dias[fecha.getUTCDay()];
+      const nombreMes = meses[month - 1];
+      
+      // Formatear manualmente la fecha (ej: 'lunes 3 de junio de 2025')
+      return `${diaSemana} ${day} de ${nombreMes} de ${year}`;
     } catch (e) {
       console.error('Error al formatear fecha:', e, 'Fecha recibida:', fechaISO);
       return fechaISO;
@@ -405,18 +407,7 @@ const FisherBookings: React.FC = () => {
   }, [puedeCancelar]);
 
   // Función para obtener el texto del botón de cancelar
-  const getCancelButtonText = useCallback((estado: Reserva['estado']) => {
-    switch (estado) {
-      case 'pendiente':
-        return 'Pendiente';
-      case 'cancelada':
-        return 'Cancelada';
-      case 'confirmada':
-        return 'Cancelar';
-      default:
-        return 'Cancelar';
-    }
-  }, []);
+
 
   // Función para obtener el color del estado
   const getEstadoColor = useCallback((estado: string) => {
@@ -500,7 +491,7 @@ const FisherBookings: React.FC = () => {
               </div>
               <div className="flex flex-wrap gap-x-8 gap-y-2 text-gray-700">
                 <div>
-                  <span className="font-semibold">Bote:</span> {reserva.bote} ({reserva.capacidad} personas)
+                  <span className="font-semibold">Bote:</span> {reserva.bote} {reserva.capacidad} 
                 </div>
                 <div>
                   <span className="font-semibold">Personas:</span> {reserva.personas}
